@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "recorded_date": "2026-10-19",
+    "notes": "Migrated timing snapshot; original environment metadata was not recorded."
+  },
+  "results": [
+    {
+      "case": "detrend_3650x30x30",
+      "python_seconds": 0.324066633998882,
+      "rust_seconds": 0.03283241202007048,
+      "speedup": 9.870326730816483
+    },
+    {
+      "case": "annual_trend_100x30x30",
+      "python_seconds": 0.0002605920017231256,
+      "rust_seconds": 0.00015867399633862078,
+      "speedup": 1.642310698263407
+    },
+    {
+      "case": "longest_runs_3650x30x30",
+      "python_seconds": 0.1982487270142883,
+      "rust_seconds": 0.00373183999909088,
+      "speedup": 53.12358704086564
+    },
+    {
+      "case": "spell_days_3650x30x30",
+      "python_seconds": 0.05989843999850564,
+      "rust_seconds": 0.002835380000760779,
+      "speedup": 21.125365905957548
+    },
+    {
+      "case": "regrid_300x300_to_60x60",
+      "python_seconds": 0.05526857700897381,
+      "rust_seconds": 0.001123948983149603,
+      "speedup": 49.173563780534415
+    },
+    {
+      "case": "full_variability_3650x30x30",
+      "python_seconds": 0.44843126498744823,
+      "rust_seconds": 0.13345760400989093,
+      "speedup": 3.360102770571347
+    },
+    {
+      "case": "public_CDD_3650x30x30",
+      "python_seconds": 0.2897541729907971,
+      "rust_seconds": 0.09101209600339644,
+      "speedup": 3.183688605303452
+    }
+  ]
+}

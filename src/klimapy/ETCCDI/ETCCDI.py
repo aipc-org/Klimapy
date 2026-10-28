@@ -10,7 +10,19 @@
 '''
 import numpy as np
 import xarray as xr
-from tqdm import tqdm
+from tqdm import tqdm as _tqdm
+import logging
+
+logger = logging.getLogger(__name__)
+
+def _log_print(*args, **kwargs):
+    logger.info(" ".join(str(value) for value in args))
+
+def tqdm(*args, **kwargs):
+    kwargs.setdefault("disable", not logger.isEnabledFor(logging.INFO))
+    return _tqdm(*args, **kwargs)
+from .._backends import rust as _accelerate
+from .._core.validation import convert_units, normalize_time, coverage, PRECIP_NAMES, TEMP_NAMES, validate_reference_years
 import warnings
 from datetime import datetime, timedelta
 
@@ -26,289 +38,18 @@ from datetime import datetime, timedelta
     自动修正无效日期（如2月30日）
     """
 def _convert_time_to_datetime(pr):
-    """
-    将输入降水数据的 time 维统一转换为 datetime64[D]。
-
-    参数:
-        pr (xarray.DataArray): 包含 time 维的降水数据。
-
-    返回:
-        xarray.DataArray: time 已标准化为日分辨率的降水数据。
-    """
-
-    time_vals = pr.time.values
-
-    # ==================== 1. 处理cftime类型 ====================
-    try:
-        import cftime
-        if len(time_vals) > 0 and isinstance(time_vals[0], cftime.datetime):
-            parsed_times = []
-            for t in time_vals:
-                year, month, day = t.year, t.month, t.day
-
-                # 修正无效日期
-                if month == 2:
-                    calendar = getattr(t, 'calendar', 'standard')
-                    if calendar in ['noleap', '365_day', '365']:
-                        day = min(day, 28)  # 无闰年日历
-                    elif calendar in ['360_day', '360']:
-                        day = min(day, 30)  # 360天日历
-                    else:
-                        # 标准日历：检查闰年
-                        is_leap = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-                        day = min(day, 29 if is_leap else 28)
-                elif month in [4, 6, 9, 11]:
-                    day = min(day, 30)  # 小月
-                else:
-                    day = min(day, 31)  # 大月
-
-                try:
-                    dt = datetime(year, month, day)
-                    parsed_times.append(np.datetime64(dt))
-                except ValueError:
-                    # 兜底修正
-                    if month == 2:
-                        day = 28
-                    elif month in [4, 6, 9, 11]:
-                        day = 30
-                    else:
-                        day = 31
-                    dt = datetime(year, month, day)
-                    parsed_times.append(np.datetime64(dt))
-
-            return pr.assign_coords(time=np.array(parsed_times, dtype='datetime64[D]'))
-    except ImportError:
-        pass
-    except Exception:
-        pass  # 继续尝试其他格式
-
-    # ==================== 2. 处理datetime64类型 ====================
-    if len(time_vals) > 0 and np.issubdtype(time_vals.dtype, np.datetime64):
-        return pr.assign_coords(time=pr.time.dt.floor('D'))
-
-    # ==================== 3. 处理数值型时间 ====================
-    if len(time_vals) > 0 and np.issubdtype(time_vals.dtype, np.number):
-        parsed_times = []
-        for val in time_vals:
-            val = float(val)
-
-            # YYYYMMDD格式
-            if 19000101 <= val <= 21001231:
-                val_int = int(val)
-                year = val_int // 10000
-                month = (val_int // 100) % 100
-                day = val_int % 100
-
-                # 修正日期
-                if month == 2:
-                    is_leap = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-                    day = min(day, 29 if is_leap else 28)
-                elif month in [4, 6, 9, 11]:
-                    day = min(day, 30)
-                else:
-                    day = min(day, 31)
-
-                dt = datetime(year, month, day)
-                parsed_times.append(np.datetime64(dt))
-
-            # 年+日序格式
-            elif 1900 <= val < 2100:
-                year = int(val)
-                doy = int(round((val - year) * 1000))
-                doy = max(1, min(doy, 366))
-                dt = datetime(year, 1, 1) + timedelta(days=doy - 1)
-                parsed_times.append(np.datetime64(dt))
-
-            # 时间戳
-            elif val > 1e9:
-                if val > 1e12:
-                    val = val / 1000
-                dt = datetime.fromtimestamp(val)
-                parsed_times.append(np.datetime64(dt))
-
-        if parsed_times:
-            return pr.assign_coords(time=np.array(parsed_times, dtype='datetime64[D]'))
-
-    # ==================== 4. 处理字符串型时间 ====================
-    if len(time_vals) > 0 and not np.issubdtype(time_vals.dtype, np.number):
-        parsed_times = []
-        date_formats = [
-            '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
-            '%Y-%m-%d %H:%M', '%Y-%m-%d',
-            '%Y/%m/%d', '%Y%m%d', '%Y.%m.%d'
-        ]
-
-        for date_str in [str(t).strip() for t in time_vals]:
-            parsed = None
-
-            # 尝试各种格式
-            for fmt in date_formats:
-                try:
-                    parsed = datetime.strptime(date_str, fmt)
-                    break
-                except ValueError as e:
-                    # 尝试修正无效日期
-                    if "day is out of range for month" in str(e):
-                        try:
-                            date_part = date_str.split(' ')[0] if ' ' in date_str else date_str
-                            parts = date_part.replace('/', '-').replace('.', '-').split('-')
-
-                            if len(parts) == 3:
-                                if len(parts[0]) == 4:  # YYYY-MM-DD
-                                    year, month, day = map(int, parts)
-                                else:  # 尝试其他顺序
-                                    try:
-                                        datetime.strptime(date_part, '%d-%m-%Y')
-                                        day, month, year = map(int, parts)
-                                    except:
-                                        continue
-
-                                # 修正日期
-                                if month == 2:
-                                    is_leap = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
-                                    day = min(day, 29 if is_leap else 28)
-                                elif month in [4, 6, 9, 11]:
-                                    day = min(day, 30)
-                                else:
-                                    day = min(day, 31)
-
-                                corrected_date = f"{year:04d}-{month:02d}-{day:02d}"
-                                if ' ' in date_str:
-                                    corrected_date = f"{corrected_date} {date_str.split(' ')[1]}"
-
-                                parsed = datetime.strptime(corrected_date, fmt)
-                                break
-                        except:
-                            continue
-
-            if parsed is None:
-                # 尝试pandas解析
-                try:
-                    import pandas as pd
-                    parsed = pd.to_datetime(date_str).to_pydatetime()
-                except:
-                    raise ValueError(f"无法解析时间字符串: {date_str}")
-
-            parsed_times.append(np.datetime64(parsed))
-
-        return pr.assign_coords(time=np.array(parsed_times, dtype='datetime64[D]'))
-
-    # ==================== 5. 未知格式 ====================
-    raise ValueError(f"无法识别的时间格式，数据类型: {time_vals.dtype}")
+    """Validate dates, retain CF calendars, and fill missing daily timestamps with NaN."""
+    return normalize_time(pr)
 """======================================"""
 
 # 检查数据格式与逐日特征
 def check_data(pr):
-    """
-    通用降水数据校验函数（含自动时间类型转换）
-    :param pr: xarray.DataArray - 待校验的降水数据
-    :return: xarray.DataArray - 校验并转换后的降水数据（time为datetime64[D]格式）
-    :raises ValueError: 数据校验失败时抛出异常
-    """
-    # 1. 基础类型校验
+    """Normalize daily precipitation units and dates, preserving native calendars."""
     if not isinstance(pr, xr.DataArray):
-        raise ValueError(f"输入数据必须是xarray.DataArray类型，当前类型: {type(pr)}")
-
-    # 2. 降水变量名校验（支持气象常用命名）
-    valid_var_names = ['pr', 'pre', 'precipitation', 'rain', 'prec', 'tp']
-    var_name = str(pr.name).lower() if pr.name is not None else ''
-    if var_name not in valid_var_names:
-        raise ValueError(
-            f"无效的降水变量名: '{pr.name}'，支持的变量名: {', '.join(valid_var_names)}"
-        )
-
-    # 3. time维度存在性校验
-    if 'time' not in pr.dims:
-        raise ValueError("输入数据必须包含'time'维度")
-
-    # 4. 核心：自动转换time维度为datetime64[D]格式
-    pr = _convert_time_to_datetime(pr)
-
-    # 5. 逐日数据校验（基于datetime64计算时间间隔）
-    time_vals = pr.time.values
-    if len(time_vals) < 2:
-        raise ValueError("time维度数据量不足，至少需要2个时间点验证逐日特征")
-
-    time_diff = np.diff(time_vals)
-    day_diff = np.timedelta64(1, 'D')
-
-    # 计算逐日比例
-    daily_ratio = np.sum(time_diff == day_diff) / len(time_diff)
-
-    # 放宽标准：允许最多5%的非逐日间隔（处理气候模型数据的不规则性）
-    if daily_ratio < 0.95:
-        # 手动计算时间间隔分布（兼容旧版numpy）
-        unique_intervals = []
-        counts = []
-
-        for interval in time_diff:
-            found = False
-            for i, u_interval in enumerate(unique_intervals):
-                if interval == u_interval:
-                    counts[i] += 1
-                    found = True
-                    break
-            if not found:
-                unique_intervals.append(interval)
-                counts.append(1)
-
-        # 找出主要的时间间隔
-        if counts:  # 确保有数据
-            max_count = max(counts)
-            max_index = counts.index(max_count)
-            main_interval = unique_intervals[max_index]
-            main_ratio = max_count / len(time_diff)
-
-            if main_ratio >= 0.95:
-                # 如果主要间隔是1天，但有一些缺失，允许继续
-                if main_interval == day_diff:
-                    print(f"注意: 数据有{100 * (1 - daily_ratio):.1f}%的时间间隔不是1天，但主要间隔是1天，继续处理")
-                    # 不抛出异常，继续处理
-                else:
-                    # 主要间隔不是1天，检查是否是气候模型常用间隔
-                    main_interval_days = main_interval / np.timedelta64(1, 'D')
-                    if abs(main_interval_days - 1.0) < 0.01:
-                        # 接近1天（如0.997天或1.003天），可能是日历差异
-                        print(f"注意: 主要时间间隔为{main_interval_days:.3f}天，继续处理")
-                        # 不抛出异常，继续处理
-                    else:
-                        # 创建间隔分布字典用于错误信息
-                        interval_dist = {}
-                        for interval, count in zip(unique_intervals, counts):
-                            interval_days = interval / np.timedelta64(1, 'D')
-                            interval_dist[f"{interval_days:.3f}天"] = count
-
-                        raise ValueError(
-                            f"输入数据非标准逐日数据！仅{daily_ratio * 100:.1f}%的时间间隔为1天\n"
-                            f"主要时间间隔: {main_interval} ({main_interval_days:.3f}天)，占比{main_ratio * 100:.1f}%\n"
-                            f"时间间隔分布: {interval_dist}\n"
-                            f"时间间隔统计：最小={np.min(time_diff)}, 最大={np.max(time_diff)}, 均值={np.mean(time_diff)}"
-                        )
-            else:
-                # 创建间隔分布字典用于错误信息
-                interval_dist = {}
-                for interval, count in zip(unique_intervals, counts):
-                    interval_days = interval / np.timedelta64(1, 'D')
-                    interval_dist[f"{interval_days:.3f}天"] = count
-
-                raise ValueError(
-                    f"输入数据非标准逐日数据！仅{daily_ratio * 100:.1f}%的时间间隔为1天\n"
-                    f"时间间隔分布: {interval_dist}\n"
-                    f"时间间隔统计：最小={np.min(time_diff)}, 最大={np.max(time_diff)}, 均值={np.mean(time_diff)}"
-                )
-        else:
-            raise ValueError(
-                f"输入数据非标准逐日数据！仅{daily_ratio * 100:.1f}%的时间间隔为1天\n"
-                f"时间间隔统计：最小={np.min(time_diff)}, 最大={np.max(time_diff)}, 均值={np.mean(time_diff)}"
-            )
-
-    # 6. 年份范围有效性校验
-    years = pr.time.dt.year.values
-    min_year, max_year = np.min(years), np.max(years)
-    if min_year > max_year:
-        raise ValueError(f"无效的年份范围: 最小年份={min_year}, 最大年份={max_year}")
-
-    return pr
+        raise ValueError('Input must be an xarray.DataArray')
+    if str(pr.name).lower() not in PRECIP_NAMES:
+        raise ValueError('Unsupported precipitation variable name: ' + str(pr.name))
+    return convert_units(normalize_time(pr), 'precip')
 
 """======================================"""
 
@@ -323,6 +64,9 @@ def _max_consecutive_true(arr):
     返回:
         numpy.float32 或 numpy.ndarray: 最长连续 True 长度。
     """
+    accelerated = _accelerate.runs(arr)
+    if accelerated is not None:
+        return accelerated
     if arr.dtype != bool:
         arr = arr.astype(bool)
 
@@ -360,7 +104,7 @@ def _max_consecutive_true(arr):
 # ====================== 基础降水指数 ======================
 def PRCPTOT(pr):
     """
-    逐年年总降水量（PRCPTOT）。
+    逐年湿日（≥1 mm）总降水量（PRCPTOT）。
 
     参数:
         pr (xarray.DataArray): 日降水数据。
@@ -373,10 +117,10 @@ def PRCPTOT(pr):
     year_labels = []
 
     for year in tqdm(years, desc="PRCPTOT"):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
-        annual_sum = year_data.sum(dim='time').astype(np.float32)
+        annual_sum = year_data.where(year_data >= 1.0, 0).sum(dim='time').astype(np.float32)
         result_list.append(annual_sum)
         year_labels.append(int(year))
 
@@ -400,8 +144,8 @@ def R1mm_days(pr):
     year_labels = []
 
     for year in tqdm(years, desc="R1mm_days"):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
         wet_days = (year_data >= 1.0).sum(dim='time').astype(np.float32)
         result_list.append(wet_days)
@@ -413,7 +157,7 @@ def R1mm_days(pr):
 
 def SDII(pr):
     """
-    逐年简单降水强度（SDII = 年总降水量 / 年湿日数）。
+    逐年简单降水强度（SDII = 湿日总降水量 / 年湿日数）。
 
     参数:
         pr (xarray.DataArray): 日降水数据。
@@ -426,10 +170,10 @@ def SDII(pr):
     year_labels = []
 
     for year in tqdm(years, desc="SDII"):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
-        annual_sum = year_data.sum(dim='time')
+        annual_sum = year_data.where(year_data >= 1.0, 0).sum(dim='time')
         wet_days = (year_data >= 1.0).sum(dim='time')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
@@ -441,91 +185,36 @@ def SDII(pr):
         return None
     return xr.concat(result_list, dim='year').assign_coords(year=year_labels)
 
-def RX1DAY(pr):
-    """
-    逐年最大日降水量（RX1DAY）。
-
-    参数:
-        pr (xarray.DataArray): 日降水数据。
-    """
+def _precipitation_maximum(pr, window, freq):
+    if isinstance(window, bool) or not isinstance(window, (int, np.integer)) or window < 1:
+        raise ValueError("window must be a positive integer")
+    if freq not in ('YS', 'MS'):
+        raise ValueError("freq must be 'YS' or 'MS'")
     pr = check_data(pr)
-    # print("计算年最大日降水量 (RX1DAY)")
-
-    years = np.unique(pr.time.dt.year)
-    result_list = []
-    year_labels = []
-
-    for year in tqdm(years, desc="RX1DAY"):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
-            continue
-        max_precip = year_data.max(dim='time').astype(np.float32)
-        result_list.append(max_precip)
-        year_labels.append(int(year))
-
-    if not result_list:
-        return None
-    return xr.concat(result_list, dim='year').assign_coords(year=year_labels)
-
-def RX5DAY(pr):
-    """
-    逐年最大 5 日降水量（RX5DAY）。
-
-    参数:
-        pr (xarray.DataArray): 日降水数据。
-    """
-    pr = check_data(pr)
-    # print("计算年最大5日降水量 (RX5DAY)")
-
-    years = np.unique(pr.time.dt.year)
-    result_list = []
-    year_labels = []
-
-    for year in tqdm(years, desc="RX5DAY"):
-        # 选择该年的数据
-        year_data = pr.sel(time=pr.time.dt.year == year)
-
-        # 检查是否有足够的数据（至少30天）
-        if len(year_data) < 30:
-            print(f"年份{year}数据点不足({len(year_data)})，跳过")
-            continue
-
-        try:
-            # 计算滑动5日总和
-            # 使用rolling方法计算5日滑动总和
-            rolling_sum = year_data.rolling(time=5, center=False).sum()
-
-            # 找出最大5日降水量
-            max_5day = rolling_sum.max(dim='time').astype(np.float32)
-
-            result_list.append(max_5day)
-            year_labels.append(int(year))
-
-        except Exception as e:
-            print(f"年份{year}计算RX5DAY时出错: {e}")
-            # 创建一个NaN数组作为占位符
-            nan_array = xr.full_like(year_data.isel(time=0), np.nan).astype(np.float32)
-            result_list.append(nan_array)
-            year_labels.append(int(year))
-
-    if not result_list:
-        print("错误：没有足够的数据计算RX5DAY")
-        return None
-
-    # 合并所有年份的结果
-    result = xr.concat(result_list, dim='year').assign_coords(year=year_labels)
-    result.name = 'RX5DAY'
-
-    # 添加属性说明
-    result.attrs.update({
-        'long_name': 'Maximum 5-day precipitation amount',
-        'units': pr.attrs.get('units', 'mm'),
-        'description': 'Maximum precipitation accumulated over any 5-day period',
-        'calculation_method': 'Maximum of 5-day rolling sum',
-        'time_period': 'annual',
-        'reference': 'ETCCDI_Results Indicator RX5day'
-    })
+    # Roll before reporting-period aggregation; assign each window to its end date.
+    rolling = pr.rolling(time=window, min_periods=window).sum()
+    result = rolling.resample(time=freq).max('time').astype(np.float32)
+    if freq == 'YS':
+        result = result.assign_coords(year=('time', result.time.dt.year.values)).swap_dims({'time': 'year'}).drop_vars('time')
+    result.attrs.update(units='mm', window_days=int(window), reporting_frequency=freq,
+                        window_assignment='ending date; windows may cross reporting periods')
     return result
+
+
+def RXnday(pr, window=5, *, freq='YS'):
+    """Maximum consecutive n-day precipitation; annual or monthly, in mm."""
+    return _precipitation_maximum(pr, window, freq).rename('RXnday')
+
+
+def RX1DAY(pr, *, freq='YS'):
+    """Maximum daily precipitation; freq='YS' (year) or 'MS' (month)."""
+    return _precipitation_maximum(pr, 1, freq).rename('RX1DAY')
+
+
+def RX5DAY(pr, *, freq='YS'):
+    """Maximum 5-day precipitation, including windows crossing year/month boundaries."""
+    return _precipitation_maximum(pr, 5, freq).rename('RX5DAY')
+
 
 def CDD(pr):
     """
@@ -542,16 +231,16 @@ def CDD(pr):
     year_labels = []
 
     for year in tqdm(years, desc="CDD"):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
         dry_mask = (year_data < 1.0)
         max_cdd = xr.apply_ufunc(
-            _max_consecutive_true,
+            _max_consecutive_last_axis,
             dry_mask,
             input_core_dims=[['time']],
             output_core_dims=[[]],
-            vectorize=True,
+            vectorize=False,
             output_dtypes=[np.float32]
         )
         result_list.append(max_cdd)
@@ -576,16 +265,16 @@ def CWD(pr):
     year_labels = []
 
     for year in tqdm(years, desc="CWD"):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
         wet_mask = (year_data >= 1.0)
         max_cwd = xr.apply_ufunc(
-            _max_consecutive_true,
+            _max_consecutive_last_axis,
             wet_mask,
             input_core_dims=[['time']],
             output_core_dims=[[]],
-            vectorize=True,
+            vectorize=False,
             output_dtypes=[np.float32]
         )
         result_list.append(max_cwd)
@@ -621,8 +310,8 @@ def _calc_threshold_precip(pr, threshold, metric_name, func_name):
     year_labels = []
 
     for year in tqdm(years, desc=func_name):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
         threshold_data = year_data.where(year_data >= threshold, 0)
         total = threshold_data.sum(dim='time').astype(np.float32)
@@ -652,8 +341,8 @@ def _calc_threshold_days(pr, threshold, metric_name, func_name):
     year_labels = []
 
     for year in tqdm(years, desc=func_name):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
         days = (year_data >= threshold).sum(dim='time').astype(np.float32)
         result_list.append(days)
@@ -682,8 +371,8 @@ def _calc_threshold_intensity(pr, threshold, metric_name, func_name):
     year_labels = []
 
     for year in tqdm(years, desc=func_name):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
         threshold_mask = year_data >= threshold
         total = year_data.where(threshold_mask).sum(dim='time')
@@ -716,8 +405,8 @@ def _calc_threshold_ratio(pr, threshold, metric_name, func_name):
     year_labels = []
 
     for year in tqdm(years, desc=func_name):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
 
         threshold_total = year_data.where(year_data >= threshold, 0).sum(dim='time')
@@ -734,6 +423,17 @@ def _calc_threshold_ratio(pr, threshold, metric_name, func_name):
         return None
 
     return xr.concat(result_list, dim='year').assign_coords(year=year_labels)
+
+
+def Rnnmm(pr, threshold=10.0):
+    """Annual count of days with precipitation >= threshold (mm/day)."""
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float, np.integer, np.floating)) or not np.isfinite(threshold) or threshold < 0:
+        raise ValueError("threshold must be a finite non-negative number")
+    result = _calc_threshold_days(pr, float(threshold), 'custom precipitation threshold', 'Rnnmm')
+    if result is not None:
+        result.name = 'Rnnmm'
+        result.attrs.update(threshold_mm_day=float(threshold), comparison='>=')
+    return result
 
 
 def R10mm_precipitation(pr):
@@ -984,8 +684,7 @@ def select_baseline_period(data, start_year, end_year):
     返回:
         xarray.DataArray: 筛选后的基准期数据。
     """
-    start_year = int(start_year)
-    end_year = int(end_year)
+    start_year, end_year = validate_reference_years(data.time, start_year, end_year)
     if start_year > end_year:
         raise ValueError(f"无效基准期: start_year({start_year}) 不能大于 end_year({end_year})")
 
@@ -1012,13 +711,13 @@ def select_baseline_period(data, start_year, end_year):
         actual_end = int(np.max(selected_years))
 
         if actual_start != start_year or actual_end != end_year:
-            print(f"注意：实际选择的年份为{actual_start}-{actual_end}，可能与请求的{start_year}-{end_year}不完全一致")
+            _log_print(f"注意：实际选择的年份为{actual_start}-{actual_end}，可能与请求的{start_year}-{end_year}不完全一致")
 
-        print(f"已选择基准期数据: {actual_start}-{actual_end}")
+        _log_print(f"已选择基准期数据: {actual_start}-{actual_end}")
         return baseline_data
 
     except Exception as e:
-        print(f"选择基准期数据时出错: {e}")
+        _log_print(f"选择基准期数据时出错: {e}")
         raise
 
 def _calculate_percentile_threshold(baseline_pr, percentile, baseline_years):
@@ -1036,16 +735,14 @@ def _calculate_percentile_threshold(baseline_pr, percentile, baseline_years):
     baseline_years = _normalize_baseline_years(baseline_years)
 
     baseline_pr = check_data(baseline_pr)
+    validate_reference_years(baseline_pr.time, *baseline_years)
 
     # 筛选基准期数据
     start_year, end_year = baseline_years
-    print(f"筛选基准期数据: {start_year}-{end_year}")
+    _log_print(f"筛选基准期数据: {start_year}-{end_year}")
     # 使用年份条件选择
     years = baseline_pr.time.dt.year
     time_mask = (years >= start_year) & (years <= end_year)
-    print("baseline_pr shape before:", baseline_pr.shape)
-    print("years shape:", years.shape)
-    print("time_mask shape:", time_mask.shape, "内容:", time_mask)
     baseline_pr = baseline_pr.isel(time=time_mask)
 
     if len(baseline_pr.time) == 0:
@@ -1054,7 +751,7 @@ def _calculate_percentile_threshold(baseline_pr, percentile, baseline_years):
     selected_years = baseline_pr.time.dt.year.values
     actual_start = int(np.min(selected_years))
     actual_end = int(np.max(selected_years))
-    print(f"已选择基准期数据: {actual_start}-{actual_end}")
+    _log_print(f"已选择基准期数据: {actual_start}-{actual_end}")
 
     # 1. 筛选湿日（≥1mm）
     wet_days = baseline_pr.where(baseline_pr >= 1.0)
@@ -1082,19 +779,11 @@ def _calculate_percentile_threshold(baseline_pr, percentile, baseline_years):
             q=percentile / 100.0,
             dim='time',
             skipna=True,
-            method='linear',
+            method='median_unbiased',
             keep_attrs=True
         )
 
-    # 4. 处理没有足够湿日的格点
-    if insufficient_count > 0:
-        # 创建xarray的DataArray来存储mask
-        insufficient_mask_da = xr.DataArray(
-            insufficient_mask,
-            coords={'lat': threshold_np.lat, 'lon': threshold_np.lon},
-            dims=['lat', 'lon']
-        )
-        threshold_np = threshold_np.where(~insufficient_mask_da, np.nan)
+    threshold_np = threshold_np.where(wet_day_count >= min_wet_days)
 
     # 5. 添加属性说明
     threshold_np.attrs.update({
@@ -1103,7 +792,8 @@ def _calculate_percentile_threshold(baseline_pr, percentile, baseline_years):
         'percentile': percentile,
         'baseline_period': f'{baseline_years[0]}-{baseline_years[1]}',
         'wet_day_threshold': '1.0 mm/day',
-        'min_wet_days_for_statistics': min_wet_days
+        'min_wet_days_for_statistics': min_wet_days,
+        'quantile_method': 'median_unbiased'
     })
 
     return threshold_np
@@ -1128,7 +818,7 @@ def _calc_percentile_precip(pr, baseline_pr, percentile, metric_name, func_name,
     baseline_years = _normalize_baseline_years(baseline_years)
 
     if baseline_pr is None:
-        print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
+        _log_print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
         baseline_pr = select_baseline_period(pr, baseline_years[0], baseline_years[1])
 
     # 获取阈值
@@ -1139,9 +829,9 @@ def _calc_percentile_precip(pr, baseline_pr, percentile, metric_name, func_name,
     year_labels = []
 
     for year in tqdm(years, desc=func_name):
-        year_data = pr.sel(time=pr.time.dt.year == year)
+        year_data = _year_slice(pr, int(year))
 
-        if len(year_data) < 30:
+        if year_data.sizes['time'] < 30:
             continue
 
         # 湿日条件
@@ -1160,7 +850,7 @@ def _calc_percentile_precip(pr, baseline_pr, percentile, metric_name, func_name,
     result = xr.concat(result_list, dim='year').assign_coords(year=year_labels)
 
     result.name = f'R{percentile}mm_precipitation'
-    return result
+    return result.where(threshold.notnull())
 
 
 def _calc_percentile_days(pr, baseline_pr, percentile, metric_name, func_name, baseline_years):
@@ -1183,7 +873,7 @@ def _calc_percentile_days(pr, baseline_pr, percentile, metric_name, func_name, b
 
     # 如果未提供基准期数据，从输入数据中提取指定基准期
     if baseline_pr is None:
-        print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
+        _log_print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
         baseline_pr = select_baseline_period(pr, baseline_years[0], baseline_years[1])
 
     # 获取每个格点的阈值
@@ -1194,13 +884,10 @@ def _calc_percentile_days(pr, baseline_pr, percentile, metric_name, func_name, b
     valid_count = valid_threshold_mask.sum().item()
     total_count = threshold.size
 
-    print(f"计算{percentile}百分位降水{metric_name} ({func_name})")
-    print(f"基准期: {threshold.attrs.get('baseline_period', f'{baseline_years[0]}-{baseline_years[1]}')}")
-    print(f"有效阈值格点: {valid_count}/{total_count} ({valid_count / total_count * 100:.1f}%)")
+    _log_print(f"计算{percentile}百分位降水{metric_name} ({func_name})")
+    _log_print(f"基准期: {threshold.attrs.get('baseline_period', f'{baseline_years[0]}-{baseline_years[1]}')}")
+    _log_print(f"有效阈值格点: {valid_count}/{total_count} ({valid_count / total_count * 100:.1f}%)")
 
-    if valid_count == 0:
-        print(f"警告：没有有效的阈值数据，无法计算{percentile}百分位降水{metric_name}")
-        return None
 
     # 获取唯一的年份
     years = np.unique(pr.time.dt.year)
@@ -1210,11 +897,11 @@ def _calc_percentile_days(pr, baseline_pr, percentile, metric_name, func_name, b
     for year in tqdm(years, desc=func_name):
         # 使用年份选择
         year_mask = pr.time.dt.year == year
-        year_data = pr.isel(time=year_mask)
+        year_data = _year_slice(pr, int(year))
 
         # 检查是否有足够的数据
-        if len(year_data) < 30:
-            print(f"年份{year}数据点不足({len(year_data)})，跳过")
+        if year_data.sizes['time'] < 30:
+            _log_print(f"年份{year}数据点不足({year_data.sizes['time']})，跳过")
             continue
 
         # 湿日条件
@@ -1228,7 +915,7 @@ def _calc_percentile_days(pr, baseline_pr, percentile, metric_name, func_name, b
         year_labels.append(int(year))
 
     if not result_list:
-        print(f"错误：没有足够的数据计算{percentile}百分位降水{metric_name}")
+        _log_print(f"错误：没有足够的数据计算{percentile}百分位降水{metric_name}")
         return None
 
     # 合并所有年份的结果
@@ -1250,8 +937,8 @@ def _calc_percentile_days(pr, baseline_pr, percentile, metric_name, func_name, b
         'insufficient_data_handling': 'NaN where threshold is NaN (insufficient wet days in baseline)'
     })
 
-    print(f"{percentile}百分位降水{metric_name}计算完成，共{len(result_list)}年数据")
-    return result
+    _log_print(f"{percentile}百分位降水{metric_name}计算完成，共{len(result_list)}年数据")
+    return result.where(threshold.notnull())
 
 
 def _calc_percentile_intensity(pr, baseline_pr, percentile, metric_name, func_name, baseline_years):
@@ -1274,7 +961,7 @@ def _calc_percentile_intensity(pr, baseline_pr, percentile, metric_name, func_na
 
     # 如果未提供基准期数据，从输入数据中提取指定基准期
     if baseline_pr is None:
-        print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
+        _log_print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
         baseline_pr = select_baseline_period(pr, baseline_years[0], baseline_years[1])
 
     # 获取每个格点的阈值
@@ -1285,13 +972,10 @@ def _calc_percentile_intensity(pr, baseline_pr, percentile, metric_name, func_na
     valid_count = valid_threshold_mask.sum().item()
     total_count = threshold.size
 
-    print(f"计算{percentile}百分位降水{metric_name} ({func_name})")
-    print(f"基准期: {threshold.attrs.get('baseline_period', f'{baseline_years[0]}-{baseline_years[1]}')}")
-    print(f"有效阈值格点: {valid_count}/{total_count} ({valid_count / total_count * 100:.1f}%)")
+    _log_print(f"计算{percentile}百分位降水{metric_name} ({func_name})")
+    _log_print(f"基准期: {threshold.attrs.get('baseline_period', f'{baseline_years[0]}-{baseline_years[1]}')}")
+    _log_print(f"有效阈值格点: {valid_count}/{total_count} ({valid_count / total_count * 100:.1f}%)")
 
-    if valid_count == 0:
-        print(f"警告：没有有效的阈值数据，无法计算{percentile}百分位降水{metric_name}")
-        return None
 
     # 获取唯一的年份
     years = np.unique(pr.time.dt.year)
@@ -1301,11 +985,11 @@ def _calc_percentile_intensity(pr, baseline_pr, percentile, metric_name, func_na
     for year in tqdm(years, desc=func_name):
         # 使用年份选择
         year_mask = pr.time.dt.year == year
-        year_data = pr.isel(time=year_mask)
+        year_data = _year_slice(pr, int(year))
 
         # 检查是否有足够的数据
-        if len(year_data) < 30:
-            print(f"年份{year}数据点不足({len(year_data)})，跳过")
+        if year_data.sizes['time'] < 30:
+            _log_print(f"年份{year}数据点不足({year_data.sizes['time']})，跳过")
             continue
 
         # 湿日条件
@@ -1327,7 +1011,7 @@ def _calc_percentile_intensity(pr, baseline_pr, percentile, metric_name, func_na
         year_labels.append(int(year))
 
     if not result_list:
-        print(f"错误：没有足够的数据计算{percentile}百分位降水{metric_name}")
+        _log_print(f"错误：没有足够的数据计算{percentile}百分位降水{metric_name}")
         return None
 
     # 合并所有年份的结果
@@ -1349,8 +1033,8 @@ def _calc_percentile_intensity(pr, baseline_pr, percentile, metric_name, func_na
         'insufficient_data_handling': 'NaN where threshold is NaN (insufficient wet days in baseline)'
     })
 
-    print(f"{percentile}百分位降水{metric_name}计算完成，共{len(result_list)}年数据")
-    return result
+    _log_print(f"{percentile}百分位降水{metric_name}计算完成，共{len(result_list)}年数据")
+    return result.where(threshold.notnull())
 
 
 def _calc_percentile_total_ratio(pr, baseline_pr, percentile, func_name, baseline_years):
@@ -1371,7 +1055,7 @@ def _calc_percentile_total_ratio(pr, baseline_pr, percentile, func_name, baselin
     baseline_years = _normalize_baseline_years(baseline_years)
 
     if baseline_pr is None:
-        print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
+        _log_print(f"未提供基准期数据，将从输入数据中提取{baseline_years[0]}-{baseline_years[1]}年作为基准期")
         baseline_pr = select_baseline_period(pr, baseline_years[0], baseline_years[1])
 
     threshold = _calculate_percentile_threshold(baseline_pr, percentile, baseline_years=baseline_years)
@@ -1381,8 +1065,8 @@ def _calc_percentile_total_ratio(pr, baseline_pr, percentile, func_name, baselin
     year_labels = []
 
     for year in tqdm(years, desc=func_name):
-        year_data = pr.sel(time=pr.time.dt.year == year)
-        if len(year_data) < 30:
+        year_data = _year_slice(pr, int(year))
+        if year_data.sizes['time'] < 30:
             continue
 
         wet_mask = year_data >= 1.0
@@ -1612,51 +1296,13 @@ def R90mm_intensity(pr, baseline_pr=None, baseline_years=None):
 # ====================== 温度指数 ======================
 # ====================== 温度指数 ======================
 def check_temperature_data(temp, valid_var_names=None):
-    """
-    通用温度数据校验函数（含自动时间类型转换）。
-
-    参数:
-        temp (xarray.DataArray): 待校验的温度数据，必须包含 time 维。
-        valid_var_names (list[str] | tuple[str] | None): 可接受的变量名集合；
-            传入 None 时使用内置常用温度变量名。
-
-    返回:
-        xarray.DataArray: 校验并转换后的温度数据（time 为 datetime64[D]）。
-
-    异常:
-        ValueError: 数据类型、变量名、维度或时间分辨率不符合要求时抛出。
-    """
+    """Normalize Celsius/Kelvin and daily dates without calendar coercion."""
     if not isinstance(temp, xr.DataArray):
-        raise ValueError(f"输入数据必须是xarray.DataArray类型，当前类型: {type(temp)}")
-
-    if valid_var_names is None:
-        valid_var_names = [
-            'tas', 'tasmax', 'tasmin', 'tmax', 'tmin', 'tx', 'tn', 'tg',
-            'temperature', 'temp', 't2m'
-        ]
-
-    var_name = str(temp.name).lower() if temp.name is not None else ''
-    if var_name not in [str(i).lower() for i in valid_var_names]:
-        raise ValueError(
-            f"无效的温度变量名: '{temp.name}'，支持的变量名: {', '.join(valid_var_names)}"
-        )
-
-    if 'time' not in temp.dims:
-        raise ValueError("输入数据必须包含'time'维度")
-
-    temp = _convert_time_to_datetime(temp)
-
-    time_vals = temp.time.values
-    if len(time_vals) < 2:
-        raise ValueError("time维度数据量不足，至少需要2个时间点验证逐日特征")
-
-    time_diff = np.diff(time_vals)
-    day_diff = np.timedelta64(1, 'D')
-    daily_ratio = np.sum(time_diff == day_diff) / len(time_diff)
-    if daily_ratio < 0.95:
-        raise ValueError(f"输入数据非逐日数据，1天间隔占比仅{daily_ratio * 100:.1f}%")
-
-    return temp
+        raise ValueError('Input must be an xarray.DataArray')
+    names = TEMP_NAMES if valid_var_names is None else valid_var_names
+    if str(temp.name).lower() not in [str(n).lower() for n in names]:
+        raise ValueError('Unsupported temperature variable name: ' + str(temp.name))
+    return convert_units(normalize_time(temp), 'temp')
 
 
 def _count_days_in_runs(arr, min_run=6):
@@ -1670,6 +1316,9 @@ def _count_days_in_runs(arr, min_run=6):
     返回:
         numpy.float32 或 numpy.ndarray: 满足条件的总天数。
     """
+    accelerated = _accelerate.runs(arr, min_run=min_run, mode=1)
+    if accelerated is not None:
+        return accelerated
     if arr.dtype != bool:
         arr = arr.astype(bool)
 
@@ -1735,6 +1384,7 @@ def _select_baseline_temperature(temp, baseline_years):
         xarray.DataArray: 基准期温度数据。
     """
     start_year, end_year = _normalize_baseline_years(baseline_years)
+    validate_reference_years(temp.time, start_year, end_year)
     years = temp.time.dt.year
     baseline = temp.isel(time=(years >= start_year) & (years <= end_year))
     if baseline.time.size == 0:
@@ -1752,57 +1402,88 @@ def _get_noleap_dayofyear(time_coord):
     返回:
         xarray.DataArray: no-leap 日序。
     """
-    doy = time_coord.dt.dayofyear
-    leap = time_coord.dt.is_leap_year
-    month = time_coord.dt.month
-    return xr.where(leap & (month > 2), doy - 1, doy)
+    if time_coord.dt.calendar == '360_day':
+        return (time_coord.dt.month-1)*30+time_coord.dt.day
+    offsets = xr.DataArray([0,31,59,90,120,151,181,212,243,273,304,334],dims='_month')
+    return offsets.isel(_month=time_coord.dt.month-1,drop=True)+time_coord.dt.day
+
+
+def _temperature_reference_threshold(baseline, percentile, window=5):
+    """Circular day-of-year sample, no Gregorian leap day, type-8 quantiles."""
+    leap = (baseline.time.dt.month == 2) & (baseline.time.dt.day == 29) & (baseline.time.dt.calendar != '360_day')
+    baseline = baseline.isel(time=~leap)
+    doy = np.asarray(_get_noleap_dayofyear(baseline.time))
+    size = 360 if baseline.time.dt.calendar == '360_day' else 365
+    values = baseline.transpose('time', ...).values
+    threshold = []
+    for day in range(1, size + 1):
+        dist = np.abs(doy - day)
+        sample = values[np.minimum(dist, size - dist) <= window // 2]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            q = np.nanquantile(sample, percentile / 100.0, axis=0, method='median_unbiased') if len(sample) else np.full(values.shape[1:], np.nan)
+        threshold.append(q)
+    spatial = baseline.isel(time=0, drop=True)
+    result = xr.DataArray(np.stack(threshold), dims=('dayofyear', *spatial.dims),
+                          coords={'dayofyear': np.arange(1, size + 1), **spatial.coords})
+    result.attrs.update(percentile=percentile, window=window, quantile_method='median_unbiased')
+    return result
 
 
 def _calendar_day_percentile_threshold(temp, baseline_years, percentile, window=5):
-    """
-    基于日序（dayofyear）和滑动窗口计算温度百分位阈值。
-
-    参数:
-        temp (xarray.DataArray): 全时段温度数据。
-        baseline_years (tuple[int, int] | list[int, int]): 基准期起止年份。
-        percentile (float | int): 百分位（如 10、90）。
-        window (int): 滑动窗口长度（天），推荐奇数。
-
-    返回:
-        xarray.DataArray: dayofyear 维度上的阈值场。
-    """
     temp = check_temperature_data(temp)
     baseline = _select_baseline_temperature(temp, baseline_years)
+    result = _temperature_reference_threshold(baseline, percentile, window)
+    result.attrs['baseline_period'] = f'{baseline_years[0]}-{baseline_years[1]}'
+    return result
 
-    # 去除闰日，避免 dayofyear 在不同年份不可比。
-    is_feb29 = (baseline.time.dt.month == 2) & (baseline.time.dt.day == 29)
-    baseline = baseline.isel(time=~is_feb29)
 
-    dayofyear = _get_noleap_dayofyear(baseline.time)
-    max_doy = 365
-    half_window = window // 2
-    threshold_list = []
+def _bootstrap_temperature_percentage(temp, baseline_years, percentile, greater_than):
+    """Zhang-style leave-one-year-out replacement, averaging indices, not thresholds.
 
-    for doy in range(1, max_doy + 1):
-        dist = np.abs(dayofyear - doy)
-        circular_dist = xr.where(dist > (max_doy / 2), max_doy - dist, dist)
-        mask = circular_dist <= half_window
-        window_data = baseline.where(mask, drop=True)
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=RuntimeWarning)
-            q = window_data.quantile(percentile / 100.0, dim='time', skipna=True, method='linear')
-
-        threshold_list.append(q.expand_dims(dayofyear=[doy]))
-
-    threshold = xr.concat(threshold_list, dim='dayofyear')
-    threshold.attrs.update({
-        'percentile': percentile,
-        'baseline_period': f'{baseline_years[0]}-{baseline_years[1]}',
-        'window': window,
-        'method': 'calendar-day moving window percentile'
-    })
-    return threshold
+    Exclude the target reference year, duplicate each other reference year in turn,
+    compute a percentile threshold for each replicate, then average target-year
+    percentages. Outside the reference period, retain the full-reference result.
+    Leap days follow the same explicit exclusion as non-bootstrap percentages.
+    """
+    baseline = _select_baseline_temperature(temp, baseline_years)
+    leap = (temp.time.dt.month == 2) & (temp.time.dt.day == 29) & (temp.time.dt.calendar != '360_day')
+    temp = temp.isel(time=~leap)
+    baseline = baseline.isel(time=~((baseline.time.dt.month == 2) & (baseline.time.dt.day == 29) & (baseline.time.dt.calendar != '360_day')))
+    ref_years = np.unique(baseline.time.dt.year.values)
+    target_years = np.unique(temp.time.dt.year.values)
+    overlap = np.intersect1d(ref_years, target_years)
+    if len(overlap) and len(ref_years) < 2:
+        raise ValueError('bootstrap requires at least two reference years; use bootstrap=False for a one-year reference')
+    full_threshold = _calendar_day_percentile_threshold(temp, baseline_years, percentile)
+    results = []
+    for year in target_years:
+        target = temp.sel(time=temp.time.dt.year == year)
+        doy = _get_noleap_dayofyear(target.time)
+        def percentage(threshold):
+            on_time = threshold.sel(dayofyear=doy)
+            exceed = target > on_time if greater_than else target < on_time
+            return exceed.where(target.notnull() & on_time.notnull()).mean('time') * 100.0
+        if year not in ref_years:
+            value = percentage(full_threshold)
+        else:
+            remaining = baseline.sel(time=baseline.time.dt.year != year)
+            replicas = []
+            for donor in ref_years[ref_years != year]:
+                # Duplicate donor samples with their original calendar days; no
+                # date interpolation or relabeling of 360/noleap calendars.
+                extra = remaining.sel(time=remaining.time.dt.year == donor)
+                sample = xr.concat([remaining, extra], dim='time')
+                replicas.append(percentage(_temperature_reference_threshold(sample, percentile)))
+            # A missing replicate invalidates the average instead of changing its weight.
+            value = xr.concat(replicas, dim='bootstrap_sample').mean('bootstrap_sample', skipna=False)
+        results.append(value.expand_dims(year=[int(year)]))
+    result = xr.concat(results, dim='year').astype(np.float32)
+    result.attrs.update(units='%', bootstrap='year replacement; mean of replicate indices',
+                        baseline_period=f'{baseline_years[0]}-{baseline_years[1]}',
+                        leap_day_policy='exclude February 29 except in 360_day calendars',
+                        quantile_method='median_unbiased')
+    return result
 
 
 def _annual_temperature_count(temp, condition, name):
@@ -1823,7 +1504,7 @@ def _annual_temperature_count(temp, condition, name):
     year_labels = []
 
     for year in tqdm(years, desc=name):
-        year_data = temp.sel(time=temp.time.dt.year == year)
+        year_data = _year_slice(temp, int(year))
         if year_data.time.size < 30:
             continue
         value = condition(year_data).sum(dim='time').astype(np.float32)
@@ -1891,93 +1572,41 @@ def TR(tn):
     return _annual_temperature_count(tn, lambda da: da > 20.0, 'TR')
 
 
-def GSL(tg, hemisphere='NH'):
-    """
-    GSL（生长季长度）。
-
-    参数:
-        tg (xarray.DataArray): 日平均温度数据（如变量名 tg/tas/t2m）。
-        hemisphere (str): 半球标识，'NH' 表示北半球（自然年），'SH' 表示南半球（7月到次年6月）。
-
-    返回:
-        xarray.DataArray | None: 年尺度生长季长度（days/year）。
-    """
+def GSL(tg, hemisphere='NH', *, min_valid_fraction=0.9):
+    """Growing-season length per grid cell; SH seasons run July through June."""
     tg = check_temperature_data(tg)
-    hemisphere = str(hemisphere).upper()
-    if hemisphere not in ['NH', 'SH']:
-        raise ValueError("hemisphere 仅支持 'NH' 或 'SH'")
-
-    result_list = []
-    year_labels = []
-
-    if hemisphere == 'NH':
-        years = np.unique(tg.time.dt.year)
-        for year in tqdm(years, desc='GSL'):
-            y = tg.sel(time=tg.time.dt.year == year)
-            if y.time.size < 30:
-                continue
-
-            warm_mask = (y > 5.0).values
-            start_idx = _find_first_run_start(warm_mask, min_run=6)
-            if start_idx is None:
-                gsl = xr.full_like(y.isel(time=0), 0).astype(np.float32)
-                result_list.append(gsl)
-                year_labels.append(int(year))
-                continue
-
-            after_july = y.time.dt.month >= 7
-            y_after_july = y.isel(time=after_july)
-            cold_mask = (y_after_july < 5.0).values
-            end_rel_idx = _find_first_run_start(cold_mask, min_run=6)
-
-            if end_rel_idx is None:
-                gsl = xr.full_like(y.isel(time=0), np.nan).astype(np.float32)
-            else:
-                end_idx = int(np.where(after_july.values)[0][0]) + end_rel_idx
-                gsl_days = max(0, end_idx - start_idx)
-                gsl = xr.full_like(y.isel(time=0), gsl_days).astype(np.float32)
-
-            result_list.append(gsl)
-            year_labels.append(int(year))
-
-    else:
-        years = np.unique(tg.time.dt.year)
-        for year in tqdm(years, desc='GSL'):
-            start = np.datetime64(f"{int(year)-1}-07-01")
-            end = np.datetime64(f"{int(year)}-06-30")
-            y = tg.sel(time=slice(start, end))
-            if y.time.size < 300:
-                continue
-
-            warm_mask = (y > 5.0).values
-            start_idx = _find_first_run_start(warm_mask, min_run=6)
-            if start_idx is None:
-                gsl = xr.full_like(y.isel(time=0), 0).astype(np.float32)
-                result_list.append(gsl)
-                year_labels.append(int(year))
-                continue
-
-            after_jan = y.time.dt.month <= 6
-            y_after_jan = y.isel(time=after_jan)
-            cold_mask = (y_after_jan < 5.0).values
-            end_rel_idx = _find_first_run_start(cold_mask, min_run=6)
-
-            if end_rel_idx is None:
-                gsl = xr.full_like(y.isel(time=0), np.nan).astype(np.float32)
-            else:
-                end_idx = int(np.where(after_jan.values)[0][0]) + end_rel_idx
-                gsl_days = max(0, end_idx - start_idx)
-                gsl = xr.full_like(y.isel(time=0), gsl_days).astype(np.float32)
-
-            result_list.append(gsl)
-            year_labels.append(int(year))
-
-    if not result_list:
+    hemi = hemisphere.upper()
+    if hemi not in ('NH','SH'):
+        raise ValueError("hemisphere must be NH or SH")
+    from .._core.validation import year_length
+    results, labels = [], []
+    for year in np.unique(tg.time.dt.year.values):
+        if hemi == 'NH':
+            period = tg.sel(time=str(int(year)))
+            second_half = period.time.dt.month >= 7
+            expected = year_length(year,tg.time.dt.calendar)
+        else:
+            period = tg.sel(time=slice(f'{int(year)-1}-07-01',f'{int(year)}-06-30'))
+            second_half = period.time.dt.month <= 6
+            expected = 360 if tg.time.dt.calendar == '360_day' else year_length(year,tg.time.dt.calendar)
+        if period.sizes['time'] < 30:
+            continue
+        def one(values, late):
+            start = _find_first_run_start(values > 5,min_run=6)
+            if start is None:
+                return np.float32(0)
+            candidates = (values < 5) & late & (np.arange(len(values)) > start)
+            end = _find_first_run_start(candidates,min_run=6)
+            return np.float32(np.nan if end is None else max(0,end-start))
+        value = xr.apply_ufunc(one,period,second_half,input_core_dims=[['time'],['time']],
+                               output_core_dims=[[]],vectorize=True,output_dtypes=[np.float32])
+        valid = period.count('time')
+        value = value.where((valid > 0) & (valid >= expected*min_valid_fraction))
+        results.append(value);labels.append(int(year))
+    if not results:
         return None
-
-    result = xr.concat(result_list, dim='year').assign_coords(year=year_labels)
-    result.name = 'GSL'
-    result.attrs.update({'units': 'days/year'})
+    result = xr.concat(results,dim='year').assign_coords(year=labels)
+    result.name='GSL';result.attrs.update(units='days/year',hemisphere=hemi)
     return result
 
 
@@ -2045,7 +1674,7 @@ def TNn(tn):
     return result
 
 
-def _temperature_percentile_percentage(temp, baseline_years, percentile, greater_than=True, name=''):
+def _temperature_percentile_percentage(temp, baseline_years, percentile, greater_than=True, name='', bootstrap=True):
     """
     计算温度相对日序百分位阈值的逐年百分比。
 
@@ -2060,9 +1689,13 @@ def _temperature_percentile_percentage(temp, baseline_years, percentile, greater
         xarray.DataArray | None: 年尺度百分比（%）。
     """
     temp = check_temperature_data(temp)
+    if not isinstance(bootstrap, bool):
+        raise ValueError('bootstrap must be a boolean')
+    if bootstrap:
+        return _bootstrap_temperature_percentage(temp, baseline_years, percentile, greater_than).rename(name)
     threshold = _calendar_day_percentile_threshold(temp, baseline_years, percentile=percentile, window=5)
 
-    is_feb29 = (temp.time.dt.month == 2) & (temp.time.dt.day == 29)
+    is_feb29 = (temp.time.dt.month == 2) & (temp.time.dt.day == 29) & (temp.time.dt.calendar != '360_day')
     temp = temp.isel(time=~is_feb29)
 
     doy = _get_noleap_dayofyear(temp.time)
@@ -2073,18 +1706,18 @@ def _temperature_percentile_percentage(temp, baseline_years, percentile, greater
     else:
         exceed = temp < threshold_on_time
 
-    result = (exceed.groupby('time.year').mean(dim='time') * 100.0).astype(np.float32)
+    result = (exceed.where(temp.notnull() & threshold_on_time.notnull()).groupby('time.year').mean(dim='time') * 100.0).astype(np.float32)
     result.name = name
     result.attrs.update({
         'units': '%',
         'percentile': percentile,
         'baseline_period': f'{baseline_years[0]}-{baseline_years[1]}',
-        'window': '5-day centered'
+        'window': '5-day centered', 'bootstrap': 'disabled', 'quantile_method': 'median_unbiased'
     })
     return result
 
 
-def TN10p(tn, baseline_years=(1961, 1990)):
+def TN10p(tn, baseline_years=(1961, 1990), *, bootstrap=True):
     """
     TN10p：逐年 TN 小于基准期日序 10 百分位阈值的百分比。
 
@@ -2095,10 +1728,10 @@ def TN10p(tn, baseline_years=(1961, 1990)):
     返回:
         xarray.DataArray | None: 年尺度百分比（%）。
     """
-    return _temperature_percentile_percentage(tn, baseline_years, percentile=10, greater_than=False, name='TN10p')
+    return _temperature_percentile_percentage(tn, baseline_years, percentile=10, greater_than=False, name='TN10p', bootstrap=bootstrap)
 
 
-def TX10p(tx, baseline_years=(1961, 1990)):
+def TX10p(tx, baseline_years=(1961, 1990), *, bootstrap=True):
     """
     TX10p：逐年 TX 小于基准期日序 10 百分位阈值的百分比。
 
@@ -2109,10 +1742,10 @@ def TX10p(tx, baseline_years=(1961, 1990)):
     返回:
         xarray.DataArray | None: 年尺度百分比（%）。
     """
-    return _temperature_percentile_percentage(tx, baseline_years, percentile=10, greater_than=False, name='TX10p')
+    return _temperature_percentile_percentage(tx, baseline_years, percentile=10, greater_than=False, name='TX10p', bootstrap=bootstrap)
 
 
-def TN90p(tn, baseline_years=(1961, 1990)):
+def TN90p(tn, baseline_years=(1961, 1990), *, bootstrap=True):
     """
     TN90p：逐年 TN 大于基准期日序 90 百分位阈值的百分比。
 
@@ -2123,10 +1756,10 @@ def TN90p(tn, baseline_years=(1961, 1990)):
     返回:
         xarray.DataArray | None: 年尺度百分比（%）。
     """
-    return _temperature_percentile_percentage(tn, baseline_years, percentile=90, greater_than=True, name='TN90p')
+    return _temperature_percentile_percentage(tn, baseline_years, percentile=90, greater_than=True, name='TN90p', bootstrap=bootstrap)
 
 
-def TX90p(tx, baseline_years=(1961, 1990)):
+def TX90p(tx, baseline_years=(1961, 1990), *, bootstrap=True):
     """
     TX90p：逐年 TX 大于基准期日序 90 百分位阈值的百分比。
 
@@ -2137,7 +1770,7 @@ def TX90p(tx, baseline_years=(1961, 1990)):
     返回:
         xarray.DataArray | None: 年尺度百分比（%）。
     """
-    return _temperature_percentile_percentage(tx, baseline_years, percentile=90, greater_than=True, name='TX90p')
+    return _temperature_percentile_percentage(tx, baseline_years, percentile=90, greater_than=True, name='TX90p', bootstrap=bootstrap)
 
 
 def _temperature_spell_days(temp, baseline_years, percentile, warm_spell=True, min_run=6, name=''):
@@ -2158,7 +1791,7 @@ def _temperature_spell_days(temp, baseline_years, percentile, warm_spell=True, m
     temp = check_temperature_data(temp)
     threshold = _calendar_day_percentile_threshold(temp, baseline_years, percentile=percentile, window=5)
 
-    is_feb29 = (temp.time.dt.month == 2) & (temp.time.dt.day == 29)
+    is_feb29 = (temp.time.dt.month == 2) & (temp.time.dt.day == 29) & (temp.time.dt.calendar != '360_day')
     temp = temp.isel(time=~is_feb29)
     threshold_on_time = threshold.sel(dayofyear=_get_noleap_dayofyear(temp.time))
 
@@ -2176,11 +1809,11 @@ def _temperature_spell_days(temp, baseline_years, percentile, warm_spell=True, m
         if y_mask.time.size < 30:
             continue
         days = xr.apply_ufunc(
-            _count_days_in_runs,
+            _count_days_last_axis,
             y_mask,
             input_core_dims=[['time']],
             output_core_dims=[[]],
-            vectorize=True,
+            vectorize=False,
             kwargs={'min_run': min_run},
             output_dtypes=[np.float32]
         )
@@ -2249,3 +1882,199 @@ def DTR(tx, tn):
     return dtr
 
 
+def _max_consecutive_last_axis(arr):
+    return _max_consecutive_true(np.moveaxis(arr, -1, 0))
+
+
+def _count_days_last_axis(arr, min_run=6):
+    return _count_days_in_runs(np.moveaxis(arr, -1, 0), min_run=min_run)
+
+
+# Per-call/batch caches never outlive their context and do not assume input arrays immutable.
+from contextvars import ContextVar
+from functools import wraps
+import inspect
+
+_CONTEXT = ContextVar('klimapy_etccdi_context', default=None)
+
+
+def _memoized(function):
+    @wraps(function)
+    def cached(*args, **kwargs):
+        cache = _CONTEXT.get()
+        if cache is None:
+            return function(*args, **kwargs)
+        def key(value):
+            if isinstance(value, (xr.DataArray, xr.Dataset)):
+                cache.setdefault('_references', []).append(value)
+                return ('array', id(value))
+            if isinstance(value, (tuple, list)):
+                return tuple(key(v) for v in value)
+            return value
+        token = (function.__name__, tuple(key(v) for v in args),
+                 tuple(sorted((k, key(v)) for k,v in kwargs.items())))
+        if token not in cache:
+            cache[token] = function(*args, **kwargs)
+        return cache[token]
+    return cached
+
+
+def _year_slice(data, year):
+    return data.sel(time=data.time.dt.year == year)
+
+
+for _helper in ('coverage', '_year_slice', 'check_data', 'check_temperature_data', 'select_baseline_period',
+                '_calculate_percentile_threshold', '_calendar_day_percentile_threshold'):
+    globals()[_helper] = _memoized(globals()[_helper])
+
+
+def _quality_checked(function):
+    signature = inspect.signature(function)
+    @wraps(function)
+    def calculate(*args, min_valid_fraction=0.9, **kwargs):
+        owned = _CONTEXT.get() is None
+        token = _CONTEXT.set({}) if owned else None
+        try:
+            bound = signature.bind(*args, **kwargs)
+            bound.apply_defaults()
+            arrays = []
+            for name, value in list(bound.arguments.items()):
+                if name not in ('pr', 'tx', 'tn', 'tg'):
+                    continue
+                value = check_data(value) if name == 'pr' else check_temperature_data(value)
+                bound.arguments[name] = value
+                arrays.append(value)
+            if 'min_valid_fraction' in signature.parameters:
+                bound.arguments['min_valid_fraction'] = min_valid_fraction
+            xr.align(*arrays, join='exact')
+            result = function(*bound.args, **bound.kwargs)
+            if result is None or not arrays:
+                return result
+            # Align paired temperature inputs exactly rather than silently intersecting dates.
+            xr.align(*arrays, join='exact')
+            valid_data = arrays[0]
+            for other in arrays[1:]:
+                valid_data = valid_data.where(other.notnull())
+            valid = coverage(valid_data, min_valid_fraction)
+            if 'year' in result.dims and function.__name__ != 'GSL':
+                result = result.where(valid.reindex(year=result.year, fill_value=False))
+            elif 'time' in result.dims:
+                count = valid_data.notnull().resample(time='MS').sum('time')
+                expected = count.time.dt.days_in_month
+                monthly = (count > 0) & (count >= expected*min_valid_fraction)
+                # Existing monthly extrema use month-end labels.
+                monthly = monthly.assign_coords(time=result.time)
+                result = result.where(monthly)
+            result.attrs.update(min_valid_fraction=min_valid_fraction,
+                                input_units=arrays[0].attrs['units'])
+            name = function.__name__
+            if name in ('PRCPTOT','RX1DAY','RX5DAY','RXnday') or name.endswith('_precipitation'):
+                result.attrs['units'] = 'mm'
+            elif name in ('SDII',) or name.endswith('_intensity'):
+                result.attrs['units'] = 'mm/day'
+            elif name.endswith('_ratio'):
+                result.attrs['units'] = '1'
+            elif name in ('CDD','CWD','Rnnmm','R1mm_days','FD','SU','ID','TR','GSL','WSDI','CSDI') or name.endswith('_days'):
+                result.attrs['units'] = 'days/year'
+            elif name in ('TXx','TNx','TXn','TNn','DTR'):
+                result.attrs['units'] = 'degC'
+            if any('units_assumed' in array.attrs for array in arrays):
+                result.attrs['units_assumed'] = ','.join(array.attrs.get('units_assumed','explicit') for array in arrays)
+            if result.name is None:
+                result.name = name
+            return result
+        finally:
+            if owned:
+                _CONTEXT.reset(token)
+    if 'min_valid_fraction' not in signature.parameters:
+        calculate.__signature__ = signature.replace(parameters=[
+            *signature.parameters.values(),
+            inspect.Parameter('min_valid_fraction', inspect.Parameter.KEYWORD_ONLY, default=0.9),
+        ])
+    return calculate
+
+
+_METRICS = [name for name, value in list(globals().items())
+            if inspect.isfunction(value) and
+            (name in ('PRCPTOT','R1mm_days','SDII','RX1DAY','RX5DAY','RXnday','Rnnmm','CDD','CWD',
+                      'FD','SU','ID','TR','GSL','TXx','TNx','TXn','TNn',
+                      'TN10p','TX10p','TN90p','TX90p','WSDI','CSDI','DTR')
+             or (name.startswith('R') and 'mm_' in name))]
+for _name in _METRICS:
+    globals()[_name] = _quality_checked(globals()[_name])
+
+
+_STANDARD_ALIASES = {
+    'Rx1day': 'RX1DAY', 'Rx5day': 'RX5DAY', 'RXdday': 'RXnday',
+    'R10mm': 'R10mm_days', 'R20mm': 'R20mm_days',
+    'R95p': 'R95mm_precipitation', 'R99p': 'R99mm_precipitation',
+    # ETCCDI naming: totals in mm, not Climpact's similarly named percentages.
+    'R95pTOT': 'R95mm_precipitation', 'R99pTOT': 'R99mm_precipitation',
+}
+for _alias, _canonical in _STANDARD_ALIASES.items():
+    globals()[_alias] = globals()[_canonical]
+_METRICS.extend(_STANDARD_ALIASES)
+
+
+def compute_indices(data, indices=None, *, baseline_years=None, min_valid_fraction=0.9,
+                    spatial_chunk_size=None, index_options=None):
+    """Compute several indices with shared validation/baseline/threshold caches.
+
+    data: DataArray, Dataset, or a mapping pr/tx/tn/tg -> DataArray.
+    spatial_chunk_size bounds work per lat/lon tile; returns an xarray.Dataset.
+    """
+    selected = ['PRCPTOT','R1mm_days','SDII','RX1DAY','RX5DAY','CDD','CWD'] if indices is None else list(indices)
+    if not selected or any(n not in _METRICS for n in selected):
+        raise ValueError('Unknown or empty ETCCDI indices: ' + str(selected))
+    options = {} if index_options is None else dict(index_options)
+    if set(options) - set(selected):
+        raise ValueError('index_options contains unselected indices')
+    for name, settings in options.items():
+        if not isinstance(settings, dict):
+            raise ValueError('Each index_options entry must be a dict')
+        forbidden = {'pr', 'tx', 'tn', 'tg', 'min_valid_fraction'} & set(settings)
+        if forbidden:
+            raise ValueError('index_options cannot override data or min_valid_fraction')
+        unknown = set(settings) - set(inspect.signature(globals()[name]).parameters)
+        if unknown:
+            raise ValueError('Unknown options for ' + name + ': ' + str(sorted(unknown)))
+    if spatial_chunk_size is not None:
+        if not isinstance(spatial_chunk_size, int) or spatial_chunk_size < 1:
+            raise ValueError('spatial_chunk_size must be a positive integer')
+        if isinstance(data, (xr.DataArray,xr.Dataset)) and 'lat' in data.dims and 'lon' in data.dims:
+            rows = []
+            for i in range(0, data.sizes['lat'], spatial_chunk_size):
+                cols = []
+                for j in range(0, data.sizes['lon'], spatial_chunk_size):
+                    tile = data.isel(lat=slice(i,i+spatial_chunk_size), lon=slice(j,j+spatial_chunk_size)).load()
+                    cols.append(compute_indices(tile, selected, baseline_years=baseline_years,
+                                                min_valid_fraction=min_valid_fraction, index_options=options))
+                rows.append(xr.concat(cols, dim='lon'))
+            return xr.concat(rows, dim='lat')
+        raise ValueError('Chunked input must be a DataArray/Dataset with lat/lon dimensions')
+    aliases = {'pr': PRECIP_NAMES, 'tx': ('tx','tasmax','tmax'),
+               'tn': ('tn','tasmin','tmin'), 'tg': ('tg','tas','t2m')}
+    def resolve(name):
+        if isinstance(data, xr.DataArray):
+            return data
+        for candidate in aliases[name]:
+            if candidate in data:
+                return data[candidate]
+        raise ValueError('Missing input for ' + name)
+    token = _CONTEXT.set({})
+    try:
+        output = {}
+        for name in selected:
+            function = globals()[name]
+            params = inspect.signature(function).parameters
+            kwargs = {p: resolve(p) for p in params if p in aliases}
+            if 'baseline_years' in params and baseline_years is not None:
+                kwargs['baseline_years'] = baseline_years
+            kwargs.update(options.get(name, {}))
+            value = function(**kwargs, min_valid_fraction=min_valid_fraction)
+            if value is None:
+                raise ValueError('No valid reporting periods for ' + name)
+            output[name] = value
+        return xr.Dataset(output)
+    finally:
+        _CONTEXT.reset(token)

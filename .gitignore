@@ -22,3 +22,22 @@ venv/
 # OS/editor files
 .DS_Store
 Thumbs.db
+
+# Rust experiment build output
+rust/target/
+*.so
+*.dylib
+*.dll
+wheelhouse/
+
+# Scientific runs: caller-owned data and results
+/work/
+/outputs/
+/data/raw/
+/data/processed/
+
+# Native builds and machine-local benchmark measurements
+**/target/
+*.pyd
+/benchmarks/results/latest.json
+/native-dist/

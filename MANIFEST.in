@@ -1,0 +1,8 @@
+include rust/Cargo.toml rust/Cargo.lock
+recursive-include rust/src *.rs
+recursive-include docs *.md
+recursive-include tests *.py *.json
+recursive-include tools *.sh *.py
+include CONTRIBUTING.md CHANGELOG.md
+recursive-include benchmarks *.py *.md
+include benchmarks/results/reference-2026-10-19.json

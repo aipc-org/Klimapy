@@ -56,19 +56,21 @@ pip install klimapy
 
 说明：
 
-1. check_data 会自动调用时间标准化逻辑，将 time 转为 datetime64[D]。
-2. 逐日检查默认要求至少 95% 的相邻时间间隔为 1 天。
+保留 cftime 原生日历；缺失的日历日期补为 NaN，重复、倒序和非日尺度日期报错。
+年度/月度结果默认要求 90% 的有效日，可通过 `min_valid_fraction` 调整。
+降水归一到 mm/day，温度归一到 degC；未知单位报错，无单位沿用旧输入约定。
 
-## 4. 时间转换能力
+## 4. 批量计算
 
-内部时间转换函数支持以下 time 类型：
+```python
+result = klipy.ETCCDI.compute_indices(
+    pr, ['PRCPTOT', 'RX1DAY', 'CDD', 'R95mm_days'],
+    baseline_years=(1981, 2010), spatial_chunk_size=32,
+)
+```
 
-1. cftime 各类日历时间
-2. numpy datetime64
-3. 数值时间（如 YYYYMMDD、部分年+日序、时间戳）
-4. 常见字符串日期格式
-
-对于无效日期（如 2 月 30 日），模块会尝试自动修正到合理日期后再计算。
+同一批次共用校验、年份切片和百分位阈值缓存。空间分块可控制原始日数据的工作集。
+支持 DataArray、Dataset 或 `pr/tx/tn/tg -> DataArray` 映射；DTR 需要 tx/tn 两个输入。
 
 ## 5. 基准期参数说明（百分位类函数）
 
@@ -87,7 +89,7 @@ pip install klimapy
 
 ## 6. 主要函数清单
 
-### 6.0 温度指数（本次已新增）
+### 6.0 温度指数
 
 年尺度阈值日数：
 
@@ -119,9 +121,9 @@ pip install klimapy
 
 ### 6.1 基础降水指数
 
-1. PRCPTOT(pr)：逐年年总降水量。
+1. PRCPTOT(pr)：逐年湿日（≥1 mm）总降水量。
 2. R1mm_days(pr)：逐年湿日数（日降水 >= 1 mm）。
-3. SDII(pr)：逐年简单降水强度（年总降水 / 年湿日数）。
+3. SDII(pr)：逐年简单降水强度（湿日总降水 / 年湿日数）。
 4. RX1DAY(pr)：逐年最大日降水量。
 5. RX5DAY(pr)：逐年最大 5 日累计降水量。
 6. CDD(pr)：逐年最大连续干日数（< 1 mm）。
@@ -258,7 +260,7 @@ dtr.to_netcdf("DTR_monthly.nc")
 
 补充：
 
-1. 当某年有效样本不足（例如少于 30 天）时，该年会被跳过。
+1. 部分旧接口会跳过不足 30 天的年份；RX1DAY/RX5DAY/RXnday 按报告期有效日比例控制输出。
 2. 若全部年份都不满足条件，函数可能返回 None。
 
 ## 9. 常见问题
@@ -309,3 +311,45 @@ R95mm_precipitation(pr, baseline_years=(1981, 2010))
 2. 百分位分析建议固定基准期，并在不同实验中保持一致。
 3. 结果建议保存为 NetCDF，便于后续统计与绘图。
 4. 温度数据建议统一单位为 °C；若原始单位为 K，请先转换后再计算阈值类指标。
+
+计算口径和与旧版的差异见 [迁移说明](../development/quality-and-migration.md)。
+
+指标完整性、标准口径差异和扩展建议见 [ETCCDI 覆盖检查](coverage-audit.md)。
+
+## 11. 标准修订与参数化接口
+
+当前提供全部 27 项核心指标对应的计算入口；接口覆盖不等于已完成外部库逐项认证。
+保留原函数名，同时导出标准别名 `Rx1day`、`Rx5day`、`R10mm`、`R20mm`、`R95p`、`R99p`。
+本库 `R95pTOT`/`R99pTOT` 按 ETCCDI 定义为超百分位降水总量，单位 mm；
+不是 Climpact 同名的百分比贡献率。原 `*_ratio` 接口仍为全部降水分母、0–1 比例。
+
+```python
+from klimapy.ETCCDI import Rnnmm, RXnday, Rx5day, TX90p, compute_indices
+
+custom_days = Rnnmm(pr, threshold=30)       # >= 30 mm/day 的年日数
+max_7day = RXnday(pr, window=7)             # 年最大连续 7 日累计，单位 mm
+monthly_max = Rx5day(pr, freq='MS')        # 月最大连续 5 日累计
+warm_days = TX90p(tx, baseline_years=(1981, 2010), bootstrap=True)
+
+result = compute_indices(
+    pr, ['Rnnmm', 'Rx5day'],
+    index_options={'Rnnmm': {'threshold': 30}, 'Rx5day': {'freq': 'MS'}},
+)
+```
+
+- `RX1DAY`、`RX5DAY`、`RXnday` 的 `freq` 支持 `YS`（默认，year 维）或 `MS`（time 维）。
+- 连续降水窗口要求每天有效，先滚动后汇总，跨年/月窗口按结束日期归属。
+- CDD/CWD、WSDI/CSDI 沿用逐年切分连续事件的策略，跨年连续段不会合并；这与滚动降水不同。
+- TN10p/TX10p/TN90p/TX90p 默认启用基准期内逐年替换 bootstrap：剔除目标基准年，
+  逐个重复其余基准年，每次重新计算阈值和目标年的比例，最后平均比例。
+  基准期外使用完整基准期阈值。bootstrap 至少需要两个基准年；不进行随机抽样。
+- 温度百分位日数排除公历/365/366 日历的 2 月 29 日；360 日历保留该日。
+  各库闰日策略可能不同，跨库对照必须统一该策略。
+- `bootstrap=False` 保留一次性阈值计算方式，适用于明确不需要基准期内校正的实验。
+- 分位数采用 `median_unbiased`（Hyndman–Fan type 8），有别于旧版本的 linear（type 7）。
+- PRCPTOT 和 SDII 改用湿日降水和，会改变包含 0–1 mm 微量降水的旧结果。
+- `index_options` 为每项指标指定参数；不能覆盖输入数组或全局有效日比例。
+
+方法依据：[ETCCDI 官方定义](https://etccdi.pacificclimate.org/list_27_indices.shtml)。
+bootstrap 替换步骤可与 [xclim 实现说明](https://xclim.readthedocs.io/en/stable/_modules/xclim/core/bootstrapping.html)对照。
+尚未完成与外部库所有指标、所有日历的数值交叉验证。

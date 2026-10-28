@@ -1,4 +1,20 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda"
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "gitlens.currentLine.enabled": true,
+    "gitlens.currentLine.format": "修改来自${author}",
+    "gitlens.currentLine.uncommittedChangesFormat": "尚未提交 · 修改来源待记录",
+    "gitlens.defaultCurrentUserNameStyle": "name",
+    "workbench.colorCustomizations": {
+        "gitlens.trailingLineForegroundColor": "#3794FF"
+    },
+    "cSpell.ignorePaths": [
+        "**/__pycache__/**",
+        "**/*.egg-info/**",
+        "**/target/**",
+        "build/**",
+        "dist/**",
+        "wheelhouse/**",
+        "native-dist/**"
+    ]
 }

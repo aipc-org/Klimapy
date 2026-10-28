@@ -1,4 +1,4 @@
-# precipvariability.py 说明
+# precip_variability_netcdf.py 说明
 
 ## 导入方式
 
@@ -9,11 +9,19 @@ import klimapy as klipy
 ## 调用方式
 
 ```python
-annual_var = klipy.PrecioitationVariablity.compute_precip_variability(ds)
-trend = klipy.PrecioitationVariablity.annual_precip_variability_trend(
+annual_var = klipy.PrecipitationVariability.compute_precip_variability(ds)
+trend = klipy.PrecipitationVariability.annual_precip_variability_trend(
 	annual_var.values,
 	annual_var["year"].values,
 	baseline_years=None
+)
+```
+
+函数导入：
+
+```python
+from klimapy.PrecipitationVariability.precip_variability_netcdf import (
+    compute_precip_variability, compute_precip_variability_split,
 )
 ```
 
@@ -52,7 +60,7 @@ $$
 P'_t(i,j)=P_t(i,j)-\overline{P}_{d(t)}(i,j)
 $$
 
-说明：若传入 `baseline_years=(start,end)`，则 $\overline{P}_d$ 仅由该时间段内样本计算；当前主流程默认使用全时段（代码里传 `None`）。
+说明：若传入 `baseline_years=(start,end)`，则 $\overline{P}_d$ 仅由该时间段内样本计算；当前主流程默认 None 使用全时段，显式基准期会传递到此函数。
 
 ### 3.2 去除线性趋势（remove_linear_trend）
 对每个格点 $(i,j)$，对 $P'_t(i,j)$ 与时间序列 $t$ 做线性回归：
@@ -97,12 +105,12 @@ $$
 
 ## 4. 主要函数说明
 
-### 4.1 compute_precip_variability(ds, baseline_years=(1979, 2014))
+### 4.1 compute_precip_variability(ds, baseline_years=None, *, spatial_chunk_size=32, min_valid_fraction=0.9)
 功能：计算全时段年降水变率序列（返回 `year, lat, lon`）。
 
 参数：
 - `ds`：`xarray.Dataset`，输入数据集，需包含降水变量与 `time/lat/lon` 维度。
-- `baseline_years`：`(start, end)`，函数签名中保留该参数；当前实现主流程中实际使用全时段去年循环（`baseline_years=None`）。
+- `baseline_years`：`(start, end)` 或 None。显式年份用于季节气候态，None 使用全时段；去趋势仍使用完整目标时段。
 
 返回：
 - `xr.DataArray`，维度为 `('year', 'lat', 'lon')`，值为每年标准差 $\sigma_y(i,j)$。
@@ -177,3 +185,9 @@ $$
 2. 年标准差基于逐日值计算，若年份缺测较多会影响稳定性。
 3. 代码中大量使用 `np.nanmean/np.nanstd`，可容忍部分缺测，但不建议大面积缺测。
 4. 若用于历史与未来对比，建议优先使用 `compute_precip_variability_split`，避免跨阶段混合气候态与趋势。
+## 分块与质量控制
+
+主流程按 `spatial_chunk_size` 分块载入日数据，接受任意排列的 time/lat/lon 及常见坐标别名。
+有效日默认至少占整年 90%，资料不足的格点为 NaN。季节索引使用月日模板，单独保留闰日。
+参考期缺少目标日的气候态时，该日异常保留 NaN。空参考期、空分段或不足两年的趋势报错。
+规范包名为 `PrecipitationVariability`；仅保留规范包名；`precipvariability` 短模块名仍可使用。

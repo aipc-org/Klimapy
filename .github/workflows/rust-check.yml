@@ -1,0 +1,56 @@
+name: Check optional Rust backend
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-wheel:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Prepare Rust and build tools
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy --component rustfmt
+          rustup default stable
+          python -m pip install build ruff
+      - name: Check Rust and build native wheel
+        env:
+          KLIMAPY_BUILD_RUST: '1'
+        run: |
+          python tools/manage.py lint --rust
+          python tools/manage.py build --rust on --outdir native-dist
+      # The C ABI library must load on a different Python minor version.
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Verify installed wheel and numerical compatibility
+        run: |
+          python -m pip install native-dist/*.whl
+          python tools/manage.py test --installed --require-rust
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-wheel-${{ matrix.os }}
+          path: native-dist/*.whl
+          if-no-files-found: error
+  manylinux-wheel:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build, repair and verify manylinux wheel
+        run: docker run --rm -v "$PWD:/io" quay.io/pypa/manylinux_2_28_x86_64 bash /io/tools/build_manylinux.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: manylinux-wheel
+          path: wheelhouse/*.whl
+          if-no-files-found: error
