@@ -1,4 +1,4 @@
-"""Optional native numerical backends."""
+"""Required Rust engine bridge; depends only on NumPy and the standard library."""
 
 from .rust import backend_info
 
