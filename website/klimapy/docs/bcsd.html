@@ -42,8 +42,10 @@ result = BCSD(
 </code></pre>
 <p>签名为：</p>
 <pre><code class="language-python">BCSD(obs_path, gcm_hist_path, gcm_fut_path, model_name,
-     output_dir, ref_start_year, ref_end_year)
+     output_dir, ref_start_year, ref_end_year, *,
+     strict=False, bc_options=None, sd_options=None)
 </code></pre>
+<p><code>strict=True</code> 时抛出异常；<code>bc_options</code> 和 <code>sd_options</code> 分别传入阶段的分块与缓存参数。独立分阶段调用在消费结果后应调用 <code>close_result</code>，一体化流程会自动释放 BC 中间结果。</p>
 <p>成功返回 <code>model_name</code>、<code>hist_bcsd_path</code>、<code>fut_bcsd_path</code>，失败返回 <code>None</code>。
 阶段函数导入：</p>
 <pre><code class="language-python">from klimapy.BCSD.BiasCorrectionSpatialDownscaling import BC, SD

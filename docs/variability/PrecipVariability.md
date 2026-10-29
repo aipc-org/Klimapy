@@ -1,4 +1,4 @@
-# precip_variability_netcdf.py 说明
+# 降水变率与趋势
 
 ## 导入方式
 
@@ -12,7 +12,7 @@ import klimapy as klipy
 annual_var = klipy.PrecipitationVariability.compute_precip_variability(ds)
 trend = klipy.PrecipitationVariability.annual_precip_variability_trend(
 	annual_var.values,
-	annual_var["year"].values,
+	annual_var.coords["year"],
 	baseline_years=None
 )
 ```
@@ -72,7 +72,7 @@ $$
 去趋势后：
 
 $$
-	ilde{P}_t(i,j)=P'_t(i,j)-\hat{P}'_t(i,j)
+\tilde{P}_t(i,j)=P'_t(i,j)-\hat{P}'_t(i,j)
 $$
 
 ### 3.3 年降水变率（calc_annual_precip_variability）
@@ -94,7 +94,7 @@ $$
 其中 $k(i,j)$ 单位是“每年变化量”。再以多年平均变率归一化并换算为 `%/10年`：
 
 $$
-	ext{Trend}_{\%/10\text{yr}}(i,j)=\frac{k(i,j)}{\overline{\sigma}(i,j)}\times 100\times 10
+\text{Trend}_{\%/10\text{yr}}(i,j)=\frac{k(i,j)}{\overline{\sigma}(i,j)}\times 100\times 10
 $$
 
 $$
@@ -109,7 +109,7 @@ $$
 功能：计算全时段年降水变率序列（返回 `year, lat, lon`）。
 
 参数：
-- `ds`：`字段字典（变量名 → Field）`，输入数据集，需包含降水变量与 `time/lat/lon` 维度。
+- `ds`：`Field` 或 `字段字典（变量名 → Field）`，输入数据集，需包含降水变量与 `time/lat/lon` 维度。
 - `baseline_years`：`(start, end)` 或 None。显式年份用于季节气候态，None 使用全时段；去趋势仍使用完整目标时段。
 
 返回：

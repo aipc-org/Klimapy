@@ -50,8 +50,11 @@ result = BCSD(
 
 ```python
 BCSD(obs_path, gcm_hist_path, gcm_fut_path, model_name,
-     output_dir, ref_start_year, ref_end_year)
+     output_dir, ref_start_year, ref_end_year, *,
+     strict=False, bc_options=None, sd_options=None)
 ```
+
+`strict=True` 时抛出异常；`bc_options` 和 `sd_options` 分别传入阶段的分块与缓存参数。独立分阶段调用在消费结果后应调用 `close_result`，一体化流程会自动释放 BC 中间结果。
 
 成功返回 `model_name`、`hist_bcsd_path`、`fut_bcsd_path`，失败返回 `None`。
 阶段函数导入：

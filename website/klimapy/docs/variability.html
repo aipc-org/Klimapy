@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：降水变率与趋势。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/variability.html"><link rel="stylesheet" href="manual.css"><title>降水变率与趋势 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a aria-current="page" href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 功能指南 / 降水变率与趋势</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">precip_variability_netcdf.py 说明</h1>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：降水变率与趋势。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/variability.html"><link rel="stylesheet" href="manual.css"><title>降水变率与趋势 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a aria-current="page" href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 功能指南 / 降水变率与趋势</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">降水变率与趋势</h1>
 <h2 id="section-2">导入方式</h2>
 <pre><code class="language-python">import klimapy as klipy
 </code></pre>
@@ -6,7 +6,7 @@
 <pre><code class="language-python">annual_var = klipy.PrecipitationVariability.compute_precip_variability(ds)
 trend = klipy.PrecipitationVariability.annual_precip_variability_trend(
 	annual_var.values,
-	annual_var[&quot;year&quot;].values,
+	annual_var.coords[&quot;year&quot;],
 	baseline_years=None
 )
 </code></pre>
@@ -53,7 +53,7 @@ $$</p>
 $$</p>
 <p>去趋势后：</p>
 <p>$$
-ilde{P}_t(i,j)=P'_t(i,j)-\hat{P}'_t(i,j)
+\tilde{P}_t(i,j)=P'_t(i,j)-\hat{P}'_t(i,j)
 $$</p>
 <h3 id="section-9">3.3 年降水变率（calc_annual_precip_variability）</h3>
 <p>对每一年 $y$，以该年所有日值计算标准差：</p>
@@ -68,7 +68,7 @@ $$</p>
 $$</p>
 <p>其中 $k(i,j)$ 单位是“每年变化量”。再以多年平均变率归一化并换算为 <code>%/10年</code>：</p>
 <p>$$
-ext{Trend}_{%/10\text{yr}}(i,j)=\frac{k(i,j)}{\overline{\sigma}(i,j)}\times 100\times 10
+\text{Trend}_{%/10\text{yr}}(i,j)=\frac{k(i,j)}{\overline{\sigma}(i,j)}\times 100\times 10
 $$</p>
 <p>$$
 \overline{\sigma}(i,j)=\operatorname{mean}_y\big(\sigma_y(i,j)\big)
@@ -79,7 +79,7 @@ $$</p>
 <p>功能：计算全时段年降水变率序列（返回 <code>year, lat, lon</code>）。</p>
 <p>参数：</p>
 <ul>
-<li><code>ds</code>：<code>字段字典（变量名 → Field）</code>，输入数据集，需包含降水变量与 <code>time/lat/lon</code> 维度。</li>
+<li><code>ds</code>：<code>Field</code> 或 <code>字段字典（变量名 → Field）</code>，输入数据集，需包含降水变量与 <code>time/lat/lon</code> 维度。</li>
 <li><code>baseline_years</code>：<code>(start, end)</code> 或 None。显式年份用于季节气候态，None 使用全时段；去趋势仍使用完整目标时段。</li>
 </ul>
 <p>返回：</p>
