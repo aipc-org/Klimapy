@@ -63,7 +63,7 @@ annual = pv.compute_precip_variability(
 annual.to_netcdf("annual_variability.nc")`}
 };
 function selectExample(key){const e=examples[key];document.getElementById('api-code').textContent=e.code;document.getElementById('api-code').setAttribute('aria-labelledby','api-'+key);document.getElementById('example-title').textContent=e.title;document.getElementById('example-note').textContent=e.note;document.getElementById('example-doc').href=root+e.doc;document.querySelectorAll('[data-example]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.example===key)));}
-const installs={pip:'python -m pip install --upgrade klimapy\n\n# 查看已安装版本\npython -m pip show klimapy',source:'git clone https://github.com/michalrees/Klimapy.git\ncd Klimapy\n\n# 需预先安装 Rust / Cargo\npython -m pip install .'};
+const installs={pip:'python -m pip install --upgrade klimapy\n\n# 查看已安装版本\npython -m pip show klimapy',source:'git clone https://github.com/aipc-org/Klimapy.git\ncd Klimapy\n\n# 需预先安装 Rust / Cargo\npython -m pip install .'};
 document.querySelectorAll('[data-example]').forEach(b=>b.addEventListener('click',()=>selectExample(b.dataset.example)));
 document.querySelectorAll('[data-install]').forEach(b=>b.addEventListener('click',()=>{document.getElementById('install-code').textContent=installs[b.dataset.install];document.getElementById('install-code').setAttribute('aria-labelledby',b.id);document.querySelectorAll('[data-install]').forEach(t=>t.setAttribute('aria-selected',String(t===b)));}));
 let toastTimer;function toast(message){const t=document.getElementById('toast');t.textContent=message;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2400);}

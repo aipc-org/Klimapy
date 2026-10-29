@@ -31,8 +31,8 @@ result["RX1DAY"].to_netcdf("rx1day.nc")
 
 ## 项目信息
 
-- [GitHub](https://github.com/michalrees/Klimapy) · [PyPI](https://pypi.org/project/klimapy/)
-- [问题反馈](https://github.com/michalrees/Klimapy/issues)
+- [GitHub](https://github.com/aipc-org/Klimapy) · [PyPI](https://pypi.org/project/klimapy/)
+- [问题反馈](https://github.com/aipc-org/Klimapy/issues)
 - MIT License · 联系：yuhaoran251@mails.ucas.ac.cn
 
 引用时请记录软件版本、算法和参数，并引用所采用的科学方法。

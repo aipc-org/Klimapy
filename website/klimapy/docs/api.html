@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：API 参考。1.2.1 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/api.html"><link rel="icon" type="image/svg+xml" href="../assets/klimapy-mark.svg"><link rel="stylesheet" href="manual.css"><title>API 参考 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../" aria-label="Klimapy 项目主页"><img class="mobile-logo" src="../assets/klimapy-logo.svg" alt="Klimapy"></a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html" aria-label="Klimapy 手册首页"><img src="../assets/klimapy-logo.svg" alt="Klimapy"></a><p class="subtitle">官方手册 <span>1.2.1</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a aria-current="page" href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考 / API 参考</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.1</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">API 参考</h1>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：API 参考。1.2.1 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/api.html"><link rel="icon" type="image/svg+xml" href="../assets/klimapy-mark.svg"><link rel="stylesheet" href="manual.css"><title>API 参考 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../" aria-label="Klimapy 项目主页"><img class="mobile-logo" src="../assets/klimapy-logo.svg" alt="Klimapy"></a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html" aria-label="Klimapy 手册首页"><img src="../assets/klimapy-logo.svg" alt="Klimapy"></a><p class="subtitle">官方手册 <span>1.2.1</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a aria-current="page" href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/aipc-org/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考 / API 参考</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.1</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">API 参考</h1>
 <p>按功能查找主要函数与默认参数。输入、输出、科学口径和使用边界见各功能章节。</p>
 <h2 id="section-2">数据模型</h2>
 <h3 id="section-3">TimeAxis</h3>
@@ -10,7 +10,7 @@
 </code></pre>
 <pre><code class="language-python">TimeAxis.labels(self)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/field.py#L102">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/native/field.py#L102">源码</a></p>
 <h3 id="section-4">Field</h3>
 <pre><code class="language-python">klimapy.native.Field
 </code></pre>
@@ -24,236 +24,236 @@
 </code></pre>
 <pre><code class="language-python">Field.to_netcdf(self, path)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/field.py#L198">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/native/field.py#L198">源码</a></p>
 <h3 id="section-5">read_field</h3>
 <pre><code class="language-python">klimapy.native.read_field(path, variable=None, *, indexers=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/field.py#L283">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/native/field.py#L283">源码</a></p>
 <h2 id="section-6">ETCCDI</h2>
 <h3 id="section-7">check_data</h3>
 <pre><code class="language-python">klimapy.etccdi.check_data(pr, valid_var_names=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L24">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L24">源码</a></p>
 <h3 id="section-8">check_temperature_data</h3>
 <pre><code class="language-python">klimapy.etccdi.check_temperature_data(temp, valid_var_names=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L28">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L28">源码</a></p>
 <h3 id="section-9">select_baseline_period</h3>
 <pre><code class="language-python">klimapy.etccdi.select_baseline_period(data, start_year, end_year)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L100">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L100">源码</a></p>
 <h3 id="section-10">PRCPTOT</h3>
 <pre><code class="language-python">klimapy.etccdi.PRCPTOT(pr, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L127">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L127">源码</a></p>
 <h3 id="section-11">R1mm_days</h3>
 <pre><code class="language-python">klimapy.etccdi.R1mm_days(pr, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L138">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L138">源码</a></p>
 <h3 id="section-12">SDII</h3>
 <pre><code class="language-python">klimapy.etccdi.SDII(pr, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L148">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L148">源码</a></p>
 <h3 id="section-13">RXnday</h3>
 <pre><code class="language-python">klimapy.etccdi.RXnday(pr, window=5, *, freq='YS', min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L159">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L159">源码</a></p>
 <h3 id="section-14">RX1DAY</h3>
 <pre><code class="language-python">klimapy.etccdi.RX1DAY(pr, *, freq='YS', min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L176">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L176">源码</a></p>
 <h3 id="section-15">RX5DAY</h3>
 <pre><code class="language-python">klimapy.etccdi.RX5DAY(pr, *, freq='YS', min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L182">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L182">源码</a></p>
 <h3 id="section-16">CDD</h3>
 <pre><code class="language-python">klimapy.etccdi.CDD(pr, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L188">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L188">源码</a></p>
 <h3 id="section-17">CWD</h3>
 <pre><code class="language-python">klimapy.etccdi.CWD(pr, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L194">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L194">源码</a></p>
 <h3 id="section-18">Rnnmm</h3>
 <pre><code class="language-python">klimapy.etccdi.Rnnmm(pr, threshold=10.0, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L200">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L200">源码</a></p>
 <h3 id="section-19">TN10p</h3>
 <pre><code class="language-python">klimapy.etccdi.TN10p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L420">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L420">源码</a></p>
 <h3 id="section-20">TX10p</h3>
 <pre><code class="language-python">klimapy.etccdi.TX10p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L432">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L432">源码</a></p>
 <h3 id="section-21">TN90p</h3>
 <pre><code class="language-python">klimapy.etccdi.TN90p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L444">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L444">源码</a></p>
 <h3 id="section-22">TX90p</h3>
 <pre><code class="language-python">klimapy.etccdi.TX90p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L456">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L456">源码</a></p>
 <h3 id="section-23">WSDI</h3>
 <pre><code class="language-python">klimapy.etccdi.WSDI(tx, baseline_years=(1961, 1990), *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L468">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L468">源码</a></p>
 <h3 id="section-24">CSDI</h3>
 <pre><code class="language-python">klimapy.etccdi.CSDI(tn, baseline_years=(1961, 1990), *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L480">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L480">源码</a></p>
 <h3 id="section-25">GSL</h3>
 <pre><code class="language-python">klimapy.etccdi.GSL(tg, hemisphere='NH', *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L492">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L492">源码</a></p>
 <h3 id="section-26">DTR</h3>
 <pre><code class="language-python">klimapy.etccdi.DTR(tx, tn, *, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L515">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L515">源码</a></p>
 <h3 id="section-27">compute_indices</h3>
 <pre><code class="language-python">klimapy.etccdi.compute_indices(data, indices=None, *, baseline_years=None, min_valid_fraction=0.9, spatial_chunk_size=None, index_options=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L544">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/etccdi/indices.py#L544">源码</a></p>
 <h2 id="section-28">统计降尺度 / BCSD</h2>
 <h3 id="section-29">bcsd</h3>
 <pre><code class="language-python">klimapy.downscaling.bcsd.bcsd(obs_path, gcm_hist_path, gcm_fut_path, model_name, output_dir, ref_start_year, ref_end_year, *, strict=False, bc_options=None, sd_options=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/downscaling/bcsd/workflow.py#L31">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/downscaling/bcsd/workflow.py#L31">源码</a></p>
 <h2 id="section-30">BCSD / 偏差校正</h2>
 <h3 id="section-31">bias_correct</h3>
 <pre><code class="language-python">klimapy.downscaling.bcsd.bias_correct(obs_path, gcm_hist_path, gcm_fut_path, model_name, ref_start_year, ref_end_year, *, strict=False, time_chunk_size=128, work_dir=None, window_size=None, n_quantiles=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/downscaling/bcsd/bias_correction.py#L35">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/downscaling/bcsd/bias_correction.py#L35">源码</a></p>
 <h3 id="section-32">close_result</h3>
 <pre><code class="language-python">klimapy.downscaling.bcsd.close_result(result, *, remove_work_files=False)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/downscaling/bcsd/bias_correction.py#L205">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/downscaling/bcsd/bias_correction.py#L205">源码</a></p>
 <h2 id="section-33">BCSD / 空间分解</h2>
 <h3 id="section-34">downscale</h3>
 <pre><code class="language-python">klimapy.downscaling.bcsd.downscale(obs_path, bc_result, output_dir, ref_start_year, ref_end_year, *, strict=False, time_chunk_size=32, spatial_chunk_size=16)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/downscaling/bcsd/spatial_downscaling.py#L44">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/downscaling/bcsd/spatial_downscaling.py#L44">源码</a></p>
 <h2 id="section-35">降水变率与趋势</h2>
 <h3 id="section-36">get_precip_var</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.get_precip_var(ds)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L9">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L9">源码</a></p>
 <h3 id="section-37">compute_precip_variability</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.compute_precip_variability(ds, baseline_years=None, *, spatial_chunk_size=32, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L35">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L35">源码</a></p>
 <h3 id="section-38">compute_precip_variability_split</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.compute_precip_variability_split(ds, split_year=2015, *, spatial_chunk_size=32, min_valid_fraction=0.9)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L105">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L105">源码</a></p>
 <h3 id="section-39">annual_precip_variability_trend</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.annual_precip_variability_trend(annual_var, years, baseline_years=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L120">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L120">源码</a></p>
 <h3 id="section-40">calc_annual_precip_variability</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.calc_annual_precip_variability(data, years)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L135">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L135">源码</a></p>
 <h3 id="section-41">remove_annual_cycle</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.remove_annual_cycle(precip, years, doy, baseline_years=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L139">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L139">源码</a></p>
 <h3 id="section-42">remove_linear_trend</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.remove_linear_trend(data)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L155">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L155">源码</a></p>
 <h3 id="section-43">calc_precip_variability</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.calc_precip_variability(data)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L159">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L159">源码</a></p>
 <h3 id="section-44">calc_variability_trend</h3>
 <pre><code class="language-python">klimapy.precipitation.variability.calc_variability_trend(data, years, doy=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L165">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/precipitation/variability.py#L165">源码</a></p>
 <h2 id="section-45">统计分析 / 插值</h2>
 <h3 id="section-46">Regridder</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.Regridder
 </code></pre>
 <pre><code class="language-python">Regridder.close(self)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L68">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L68">源码</a></p>
 <h3 id="section-47">interpolate</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.interpolate(data, target_grid=None, method='bilinear', *, source_grid=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L205">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L205">源码</a></p>
 <h3 id="section-48">no_interpolation</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.no_interpolation(data)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L212">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L212">源码</a></p>
 <h3 id="section-49">bilinear</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.bilinear(data, target_grid)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L216">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L216">源码</a></p>
 <h3 id="section-50">nearest_neighbor</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.nearest_neighbor(data, target_grid)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L220">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L220">源码</a></p>
 <h3 id="section-51">first_order_conservative</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.first_order_conservative(data, target_grid, *, source_grid=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L224">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L224">源码</a></p>
 <h3 id="section-52">second_order_conservative</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.second_order_conservative(data, target_grid, *, source_grid=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L228">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L228">源码</a></p>
 <h3 id="section-53">patch</h3>
 <pre><code class="language-python">klimapy.statistics.interpolation.patch(data, target_grid)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L232">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/interpolation.py#L232">源码</a></p>
 <h2 id="section-54">统计分析 / EOF 与 SVD</h2>
 <h3 id="section-55">svd</h3>
 <pre><code class="language-python">klimapy.statistics.svd(data, *, n_modes=None, tol=1e-12, max_sweeps=100)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/linalg.py#L63">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/linalg.py#L63">源码</a></p>
 <h3 id="section-56">EOFResult</h3>
 <pre><code class="language-python">klimapy.statistics.EOFResult
 </code></pre>
 <pre><code class="language-python">EOFResult.reconstruct(self, n_modes=None, *, add_mean=True)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/linalg.py#L97">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/linalg.py#L97">源码</a></p>
 <h3 id="section-57">eof</h3>
 <pre><code class="language-python">klimapy.statistics.eof(data, *, n_modes=None, weights=None, lat=None, center=True, ddof=1, tol=1e-12, max_sweeps=100)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/linalg.py#L147">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/linalg.py#L147">源码</a></p>
 <h2 id="section-58">统计分析 / 空间统计</h2>
 <h3 id="section-59">calculate_spatial_mean</h3>
 <pre><code class="language-python">klimapy.statistics.spatial.calculate_spatial_mean(data_array, method='arithmetic', include_zeros=False, shp=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/spatial.py#L26">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/spatial.py#L26">源码</a></p>
 <h2 id="section-60">统计分析 / 气候态</h2>
 <h3 id="section-61">climatology_period</h3>
 <pre><code class="language-python">klimapy.statistics.climatology_period(as_of_year=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/climatology.py#L21">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/climatology.py#L21">源码</a></p>
 <h3 id="section-62">compute_climatology</h3>
 <pre><code class="language-python">klimapy.statistics.compute_climatology(data, *, variable=None, baseline_years=None, group='monthly', as_of_year=None, min_valid_fraction=0.9, time_chunk_size=128)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/statistics/climatology.py#L37">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/statistics/climatology.py#L37">源码</a></p>
 <h2 id="section-63">辅助工具 / NetCDF</h2>
 <h3 id="section-64">to_netcdf</h3>
 <pre><code class="language-python">klimapy.tools.to_netcdf(field, path)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/tools/storage.py#L6">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/tools/storage.py#L6">源码</a></p>
 <h2 id="section-65">辅助工具 / GeoTIFF</h2>
 <h3 id="section-66">to_geotiff</h3>
 <pre><code class="language-python">klimapy.tools.to_geotiff(nc_file, output_dir, clip_extent=None, variable=None, start_year=None, end_year=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/tools/geotiff.py#L12">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/tools/geotiff.py#L12">源码</a></p>
 <h2 id="section-67">辅助工具 / CSV</h2>
 <h3 id="section-68">to_csv</h3>
 <pre><code class="language-python">klimapy.tools.to_csv(field, path, *, missing_value='', value_column=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/tools/csv.py#L12">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/tools/csv.py#L12">源码</a></p>
 <h2 id="section-69">批处理</h2>
 <h3 id="section-70">process_models</h3>
 <pre><code class="language-python">klimapy.process_models(jobs, *, output_dir, strict=False, bc_options=None, sd_options=None)
 </code></pre>
-<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/workflows/batch.py#L9">源码</a></p>
+<p><a href="https://github.com/aipc-org/Klimapy/blob/main/src/klimapy/workflows/batch.py#L9">源码</a></p>
 <h2 id="section-71">动态生成的 ETCCDI 指标</h2>
 <p>降水阈值类指标提供以下命名组合。完整口径与返回频率见 <a href="etccdi.html">ETCCDI</a>。</p>
 <table>
@@ -279,4 +279,4 @@
 </tbody>
 </table>
 <p>这里的 <code>metric</code> 代表所选函数名称，不是额外导出的函数。百分位降水必须显式提供基准期；温度百分位函数的 bootstrap 默认行为见其独立签名及指南。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="validation.html"><small>上一章</small>验证与效率 ←</a><a href="faq.html"><small>下一章</small>常见问题 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">数据模型</a><a class="level-3" href="#section-3">TimeAxis</a><a class="level-3" href="#section-4">Field</a><a class="level-3" href="#section-5">read_field</a><a class="level-2" href="#section-6">ETCCDI</a><a class="level-3" href="#section-7">check_data</a><a class="level-3" href="#section-8">check_temperature_data</a><a class="level-3" href="#section-9">select_baseline_period</a><a class="level-3" href="#section-10">PRCPTOT</a><a class="level-3" href="#section-11">R1mm_days</a><a class="level-3" href="#section-12">SDII</a><a class="level-3" href="#section-13">RXnday</a><a class="level-3" href="#section-14">RX1DAY</a><a class="level-3" href="#section-15">RX5DAY</a><a class="level-3" href="#section-16">CDD</a><a class="level-3" href="#section-17">CWD</a><a class="level-3" href="#section-18">Rnnmm</a><a class="level-3" href="#section-19">TN10p</a><a class="level-3" href="#section-20">TX10p</a><a class="level-3" href="#section-21">TN90p</a><a class="level-3" href="#section-22">TX90p</a><a class="level-3" href="#section-23">WSDI</a><a class="level-3" href="#section-24">CSDI</a><a class="level-3" href="#section-25">GSL</a><a class="level-3" href="#section-26">DTR</a><a class="level-3" href="#section-27">compute_indices</a><a class="level-2" href="#section-28">统计降尺度 / BCSD</a><a class="level-3" href="#section-29">bcsd</a><a class="level-2" href="#section-30">BCSD / 偏差校正</a><a class="level-3" href="#section-31">bias_correct</a><a class="level-3" href="#section-32">close_result</a><a class="level-2" href="#section-33">BCSD / 空间分解</a><a class="level-3" href="#section-34">downscale</a><a class="level-2" href="#section-35">降水变率与趋势</a><a class="level-3" href="#section-36">get_precip_var</a><a class="level-3" href="#section-37">compute_precip_variability</a><a class="level-3" href="#section-38">compute_precip_variability_split</a><a class="level-3" href="#section-39">annual_precip_variability_trend</a><a class="level-3" href="#section-40">calc_annual_precip_variability</a><a class="level-3" href="#section-41">remove_annual_cycle</a><a class="level-3" href="#section-42">remove_linear_trend</a><a class="level-3" href="#section-43">calc_precip_variability</a><a class="level-3" href="#section-44">calc_variability_trend</a><a class="level-2" href="#section-45">统计分析 / 插值</a><a class="level-3" href="#section-46">Regridder</a><a class="level-3" href="#section-47">interpolate</a><a class="level-3" href="#section-48">no_interpolation</a><a class="level-3" href="#section-49">bilinear</a><a class="level-3" href="#section-50">nearest_neighbor</a><a class="level-3" href="#section-51">first_order_conservative</a><a class="level-3" href="#section-52">second_order_conservative</a><a class="level-3" href="#section-53">patch</a><a class="level-2" href="#section-54">统计分析 / EOF 与 SVD</a><a class="level-3" href="#section-55">svd</a><a class="level-3" href="#section-56">EOFResult</a><a class="level-3" href="#section-57">eof</a><a class="level-2" href="#section-58">统计分析 / 空间统计</a><a class="level-3" href="#section-59">calculate_spatial_mean</a><a class="level-2" href="#section-60">统计分析 / 气候态</a><a class="level-3" href="#section-61">climatology_period</a><a class="level-3" href="#section-62">compute_climatology</a><a class="level-2" href="#section-63">辅助工具 / NetCDF</a><a class="level-3" href="#section-64">to_netcdf</a><a class="level-2" href="#section-65">辅助工具 / GeoTIFF</a><a class="level-3" href="#section-66">to_geotiff</a><a class="level-2" href="#section-67">辅助工具 / CSV</a><a class="level-3" href="#section-68">to_csv</a><a class="level-2" href="#section-69">批处理</a><a class="level-3" href="#section-70">process_models</a><a class="level-2" href="#section-71">动态生成的 ETCCDI 指标</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+</article><nav class="pager" aria-label="章节翻页"><a href="validation.html"><small>上一章</small>验证与效率 ←</a><a href="faq.html"><small>下一章</small>常见问题 →</a></nav><footer>MIT License · <a href="https://github.com/aipc-org/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">数据模型</a><a class="level-3" href="#section-3">TimeAxis</a><a class="level-3" href="#section-4">Field</a><a class="level-3" href="#section-5">read_field</a><a class="level-2" href="#section-6">ETCCDI</a><a class="level-3" href="#section-7">check_data</a><a class="level-3" href="#section-8">check_temperature_data</a><a class="level-3" href="#section-9">select_baseline_period</a><a class="level-3" href="#section-10">PRCPTOT</a><a class="level-3" href="#section-11">R1mm_days</a><a class="level-3" href="#section-12">SDII</a><a class="level-3" href="#section-13">RXnday</a><a class="level-3" href="#section-14">RX1DAY</a><a class="level-3" href="#section-15">RX5DAY</a><a class="level-3" href="#section-16">CDD</a><a class="level-3" href="#section-17">CWD</a><a class="level-3" href="#section-18">Rnnmm</a><a class="level-3" href="#section-19">TN10p</a><a class="level-3" href="#section-20">TX10p</a><a class="level-3" href="#section-21">TN90p</a><a class="level-3" href="#section-22">TX90p</a><a class="level-3" href="#section-23">WSDI</a><a class="level-3" href="#section-24">CSDI</a><a class="level-3" href="#section-25">GSL</a><a class="level-3" href="#section-26">DTR</a><a class="level-3" href="#section-27">compute_indices</a><a class="level-2" href="#section-28">统计降尺度 / BCSD</a><a class="level-3" href="#section-29">bcsd</a><a class="level-2" href="#section-30">BCSD / 偏差校正</a><a class="level-3" href="#section-31">bias_correct</a><a class="level-3" href="#section-32">close_result</a><a class="level-2" href="#section-33">BCSD / 空间分解</a><a class="level-3" href="#section-34">downscale</a><a class="level-2" href="#section-35">降水变率与趋势</a><a class="level-3" href="#section-36">get_precip_var</a><a class="level-3" href="#section-37">compute_precip_variability</a><a class="level-3" href="#section-38">compute_precip_variability_split</a><a class="level-3" href="#section-39">annual_precip_variability_trend</a><a class="level-3" href="#section-40">calc_annual_precip_variability</a><a class="level-3" href="#section-41">remove_annual_cycle</a><a class="level-3" href="#section-42">remove_linear_trend</a><a class="level-3" href="#section-43">calc_precip_variability</a><a class="level-3" href="#section-44">calc_variability_trend</a><a class="level-2" href="#section-45">统计分析 / 插值</a><a class="level-3" href="#section-46">Regridder</a><a class="level-3" href="#section-47">interpolate</a><a class="level-3" href="#section-48">no_interpolation</a><a class="level-3" href="#section-49">bilinear</a><a class="level-3" href="#section-50">nearest_neighbor</a><a class="level-3" href="#section-51">first_order_conservative</a><a class="level-3" href="#section-52">second_order_conservative</a><a class="level-3" href="#section-53">patch</a><a class="level-2" href="#section-54">统计分析 / EOF 与 SVD</a><a class="level-3" href="#section-55">svd</a><a class="level-3" href="#section-56">EOFResult</a><a class="level-3" href="#section-57">eof</a><a class="level-2" href="#section-58">统计分析 / 空间统计</a><a class="level-3" href="#section-59">calculate_spatial_mean</a><a class="level-2" href="#section-60">统计分析 / 气候态</a><a class="level-3" href="#section-61">climatology_period</a><a class="level-3" href="#section-62">compute_climatology</a><a class="level-2" href="#section-63">辅助工具 / NetCDF</a><a class="level-3" href="#section-64">to_netcdf</a><a class="level-2" href="#section-65">辅助工具 / GeoTIFF</a><a class="level-3" href="#section-66">to_geotiff</a><a class="level-2" href="#section-67">辅助工具 / CSV</a><a class="level-3" href="#section-68">to_csv</a><a class="level-2" href="#section-69">批处理</a><a class="level-3" href="#section-70">process_models</a><a class="level-2" href="#section-71">动态生成的 ETCCDI 指标</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

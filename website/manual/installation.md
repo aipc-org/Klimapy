@@ -24,7 +24,7 @@ Shapefile 读取与 CRS 转换还需原生 GDAL；WGS84 GeoJSON 掩膜和 GeoTIF
 ## 源码安装
 
 ```bash
-git clone https://github.com/michalrees/Klimapy.git
+git clone https://github.com/aipc-org/Klimapy.git
 cd Klimapy
 python -m pip install .
 ```

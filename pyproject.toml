@@ -20,8 +20,8 @@ dev = ["build", "twine", "ruff"]
 [project.urls]
 "Homepage" = "https://michalrees.bid/klimapy/"
 "Documentation" = "https://michalrees.bid/klimapy/docs/"
-"Bug Tracker" = "https://github.com/michalrees/klimapy/issues"
-"Source Code" = "https://github.com/michalrees/klimapy"
+"Bug Tracker" = "https://github.com/aipc-org/Klimapy/issues"
+"Source Code" = "https://github.com/aipc-org/Klimapy"
 
 [tool.setuptools.packages.find]
 where = ["src"]
