@@ -23,6 +23,10 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Local credentials and agent state
+/.aws/
+/.codex/
+
 # Rust experiment build output
 rust/target/
 *.so

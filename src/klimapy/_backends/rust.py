@@ -25,7 +25,7 @@ def _load():
         try:
             lib = ct.CDLL(str(path))
             lib.klimapy_abi_version.restype = ct.c_uint32
-            if lib.klimapy_abi_version() != 4:
+            if lib.klimapy_abi_version() != 5:
                 continue
             signatures = {
                 "kl_svd": [
@@ -171,7 +171,7 @@ def backend_info():
     return {
         "requested": os.environ.get("KLIMAPY_BACKEND", "rust"),
         "engine": "rust",
-        "abi_version": 4,
+        "abi_version": 5,
         "rust_available": _load() is not None,
     }
 

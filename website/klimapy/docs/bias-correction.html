@@ -1,9 +1,9 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：BC 偏差校正。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/bias-correction.html"><link rel="stylesheet" href="manual.css"><title>BC 偏差校正 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a aria-current="page" href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 功能指南 / BC 偏差校正</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">BC — Bias Correction（偏差校正）</h1>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：偏差校正函数。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/bias-correction.html"><link rel="stylesheet" href="manual.css"><title>偏差校正函数 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" aria-current="page" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 统计降尺度 / 偏差校正函数</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">BC — Bias Correction（偏差校正）</h1>
 <p>BC 是降水偏差校正模块，基于观测和模式历史期拟合逐日序分位数映射，
 对历史期和未来期降水进行校正。当前仅支持降水。</p>
-<pre><code class="language-python">import klimapy as klipy
+<pre><code class="language-python">from klimapy.downscaling.bcsd import bias_correct, close_result
 
-bc_result = klipy.BC.BC(
+bc_result = bias_correct(
     obs_path='obs_daily.nc',
     gcm_hist_path='model_historical.nc',
     gcm_fut_path='model_future.nc',
@@ -19,7 +19,7 @@ historical = bc_result['corrected_hist_pr']
 future = bc_result['corrected_fut_pr']
 </code></pre>
 <p>也可以直接导入函数：</p>
-<pre><code class="language-python">from klimapy.BCSD.BiasCorrection import BC
+<pre><code class="language-python">from klimapy.downscaling.bcsd import bias_correct
 </code></pre>
 <h2 id="section-2">输入和参数</h2>
 <p>六个参数均需显式提供：</p>
@@ -98,10 +98,10 @@ future = bc_result['corrected_fut_pr']
 </table>
 <h2 id="section-4">与 SD 连接</h2>
 <p>将完整的 <code>bc_result</code> 传给 <a href="downscaling.html">SD</a>，并提供相同的观测文件和参考期。
-BC 的计算代码位于 <code>src/klimapy/BCSD/BiasCorrection.py</code>，与 SD 分开维护。
+BC 的计算代码位于 <code>src/klimapy/downscaling/bcsd/bias_correction.py</code>，与 SD 分开维护。
 日历、单位转换和诊断工具放在 <code>_core/common.py</code>。</p>
 <p>当前算法保持原实现：先将观测聚合到模式网格，再按日序滑动窗口构造样本，
-使用纯 Rust FITPACK 三次平滑样条（对应 UnivariateSpline 的 knot workspace 策略）拟合分位数映射；超出拟合区间的数值使用边界夹持。</p>
+使用三次平滑样条拟合分位数映射；超出拟合区间的数值使用边界夹持。</p>
 <h2 id="section-5">日期匹配、缓存和内存</h2>
 <p>拟合样本为参考期内观测/模式的年月日交集；每个请求年份须存在。
 历史输出保留完整模式时段。滑动窗口按日历日序循环，跨年窗口也正确匹配。
@@ -111,10 +111,13 @@ BC 的计算代码位于 <code>src/klimapy/BCSD/BiasCorrection.py</code>，与 S
 <code>work_dir</code> 可让校正结果使用磁盘映射，调用者负责在消费并释放数组后清理该目录。
 未设置时输出仍在内存中；参考观测按时间块读取，模式按纬度行读取。
 返回的 <code>diagnostics</code> 记录实际匹配天数、拟合/未拟合传递函数数目和参考期。</p>
-<p>使用磁盘映射时，消费结果后可调用 <code>klipy.BC.close_result(bc_result, remove_work_files=True)</code>，
+<p>使用磁盘映射时，消费结果后可调用 <code>close_result(bc_result, remove_work_files=True)</code>，
 关闭并删除该结果自己的 backing 文件；此前提取的数组视图在关闭后不得继续使用。
 <code>process_models</code> 和一体化 BCSD 入口会在 SD 结束后自动释放这些中间文件。</p>
-<p>原生输入也可直接使用 Field。样条若返回 FITPACK 近似拟合状态 2/3，会显式警告，
+<p>输入也可使用 Field。样条未达到目标平滑度时会报告近似拟合警告，
 并计入 <code>diagnostics.approximate_functions</code>；不把未达到平滑目标伪装成精确拟合。
 其他拟合错误会使严格流程失败。关闭 <code>close_result</code> 后不要再访问原 memmap 视图。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="interpolation.html"><small>上一章</small>空间插值与重映射 ←</a><a href="downscaling.html"><small>下一章</small>SD 空间降尺度 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">输入和参数</a><a class="level-2" href="#section-3">返回值</a><a class="level-2" href="#section-4">与 SD 连接</a><a class="level-2" href="#section-5">日期匹配、缓存和内存</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<h2 id="section-6">日期与质量控制</h2>
+<p>参考样本按观测与模式的真实年月日交集匹配。不同日历没有对应的日期不凭空补成配对样本，例如 360_day 的 2 月 30 日不会与公历观测强行配对；可使用循环窗口内其他匹配日期拟合。所有请求基准年份必须存在，缺测天数和有效传递函数数量记录在 diagnostics。拟合只使用参考期，历史输出保留模式完整历史时段。</p>
+<p>strict=True 时输入、拟合或文件错误直接抛出异常；默认模式记录错误并返回 None。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="bcsd.html"><small>上一章</small>BCSD ←</a><a href="downscaling.html"><small>下一章</small>空间分解函数 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">输入和参数</a><a class="level-2" href="#section-3">返回值</a><a class="level-2" href="#section-4">与 SD 连接</a><a class="level-2" href="#section-5">日期匹配、缓存和内存</a><a class="level-2" href="#section-6">日期与质量控制</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

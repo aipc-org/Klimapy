@@ -1,0 +1,66 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：AI 工具接入。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/mcp.html"><link rel="stylesheet" href="manual.css"><title>AI 工具接入 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a aria-current="page" href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / AI / MCP / AI 工具接入</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">AI / MCP</h1>
+<p>Klimapy 提供本地 MCP 工具，让支持 MCP 的 AI 客户端查看气候文件、计算指标和气候态，并导出结果。</p>
+<h2 id="section-2">启动</h2>
+<pre><code class="language-bash">python -m klimapy.mcp --data-root /path/to/data --output-root /path/to/results
+</code></pre>
+<p>两个目录应事先存在。输入路径相对于 data-root，输出路径相对于 output-root。未配置 output-root 时只能查看数据，计算和导出工具不会写文件。</p>
+<p>客户端配置示例：</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;klimapy&quot;: {
+      &quot;command&quot;: &quot;python&quot;,
+      &quot;args&quot;: [
+        &quot;-m&quot;, &quot;klimapy.mcp&quot;,
+        &quot;--data-root&quot;, &quot;/path/to/data&quot;,
+        &quot;--output-root&quot;, &quot;/path/to/results&quot;
+      ]
+    }
+  }
+}
+</code></pre>
+<p>客户端应使用安装了 Klimapy 的 Python 解释器；必要时将 command 改为解释器完整路径。</p>
+<h2 id="section-3">可用工具</h2>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>inspect_dataset</td>
+<td>查看 NetCDF 变量、维度、形状与属性</td>
+</tr>
+<tr>
+<td>compute_etccdi</td>
+<td>计算所选极端指标，并分别保存 NetCDF</td>
+</tr>
+<tr>
+<td>compute_climatology</td>
+<td>计算月、月日或整个参考期气候平均场</td>
+</tr>
+<tr>
+<td>export_csv</td>
+<td>将指定变量区域导出为 CSV</td>
+</tr>
+</tbody>
+</table>
+<p>可以向 AI 描述：“查看 daily_pr.nc 的变量和日历”“计算 1981–2010 年的月降水气候态”“把 daily_pr.nc 的一个区域导出成 CSV”。AI 会根据工具参数组织调用；执行前应核对它选择的变量、时间范围和输出位置。</p>
+<h2 id="section-4">参数示例</h2>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;compute_climatology&quot;,
+  &quot;arguments&quot;: {
+    &quot;path&quot;: &quot;daily_pr.nc&quot;,
+    &quot;variable&quot;: &quot;pr&quot;,
+    &quot;baseline_years&quot;: [1981, 2010],
+    &quot;group&quot;: &quot;monthly&quot;,
+    &quot;output&quot;: &quot;monthly_climatology.nc&quot;
+  }
+}
+</code></pre>
+<p>ETCCDI 和 CSV 工具默认读取前 366 个时间步及 16×16 空间区域，可通过 time_slice、lat_slice 和 lon_slice 调整。单次字段读取最多一千万个值。气候态工具按时间块读取指定基准期。百分位指标需提供所需基准期与充分的时间范围。</p>
+<h2 id="section-5">连接方式与文件范围</h2>
+<p>使用本地 stdio 传输，支持 MCP 2025-11-25 协议系列及所列较早版本的初始化协商。工具只访问配置目录以内的文件，拒绝目录外路径；输出不覆盖已有文件。该接口不提供任意 Python 或 shell 执行功能。</p>
+<p>协议说明：<a href="https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle">MCP 生命周期</a>、<a href="https://modelcontextprotocol.io/specification/2025-11-25/server/tools">工具调用</a>。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="csv.html"><small>上一章</small>CSV 导出 ←</a><a href="validation.html"><small>下一章</small>验证与效率 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">启动</a><a class="level-2" href="#section-3">可用工具</a><a class="level-2" href="#section-4">参数示例</a><a class="level-2" href="#section-5">连接方式与文件范围</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

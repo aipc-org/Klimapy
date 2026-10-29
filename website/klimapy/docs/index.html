@@ -1,73 +1,53 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：官方手册。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/"><link rel="stylesheet" href="manual.css"><title>官方手册 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a aria-current="page" href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / 官方手册</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">Klimapy 官方手册</h1>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：官方手册。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/"><link rel="stylesheet" href="manual.css"><title>官方手册 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a aria-current="page" href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / 官方手册</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">Klimapy 官方手册</h1>
 <p>Klimapy 为气候分析提供统一入口，用 Python 表达研究流程，让 Rust 执行底层计算，把精力留给问题本身。</p>
-<p>本手册面向 <strong>1.1.0 原生 Rust 架构</strong>，涵盖安装、数据输入、指标计算、偏差校正、空间降尺度、统计与文件输出。旧版 1.0.0 的 xarray 输入和返回对象不能直接套用这些示例。</p>
-<h2 id="section-2">从哪里开始</h2>
+<h2 id="section-2">功能分组</h2>
 <table>
 <thead>
 <tr>
-<th>你的任务</th>
-<th>阅读章节</th>
+<th>分组</th>
+<th>内容</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>第一次安装</td>
-<td><a href="installation.html">安装与环境</a></td>
-</tr>
-<tr>
-<td>准备自己的 NetCDF 文件</td>
-<td><a href="data-model.html">Field 与原生数据入口</a></td>
-</tr>
-<tr>
-<td>计算极端气候指数</td>
 <td><a href="etccdi.html">ETCCDI</a></td>
+<td>降水与温度极端气候指数</td>
 </tr>
 <tr>
-<td>校正和降尺度模式降水</td>
-<td><a href="bias-correction.html">BC</a>、<a href="downscaling.html">SD</a>、<a href="bcsd.html">完整流程</a></td>
+<td><a href="statistical-downscaling.html">统计降尺度</a></td>
+<td>BCSD，包含偏差校正与空间分解</td>
 </tr>
 <tr>
-<td>插值到新的经纬度网格</td>
-<td><a href="interpolation.html">空间插值</a></td>
+<td><a href="variability.html">降水</a></td>
+<td>降水变率与趋势</td>
 </tr>
 <tr>
-<td>分析年际变率或空间模态</td>
-<td><a href="variability.html">降水变率</a>、<a href="linalg.html">SVD / EOF</a></td>
+<td><a href="statistics.html">统计分析</a></td>
+<td>空间插值与重映射、EOF/SVD、空间统计、气候态</td>
 </tr>
 <tr>
-<td>按函数查找参数</td>
-<td><a href="api.html">API 参考</a></td>
+<td><a href="storage.html">辅助工具</a></td>
+<td>NetCDF 存储、GeoTIFF 与 CSV 导出</td>
 </tr>
 </tbody>
 </table>
-<h2 id="section-3">设计思路</h2>
-<p>Python 负责接口、参数校验、日历与坐标元数据、结果组织；Rust 引擎负责已迁移功能的底层数值计算。生产 Python 依赖为 NumPy，不提供 Python 数值备用实现。</p>
-<p>原生文件入口使用系统 libnetcdf / HDF5。GeoTIFF 输出由 Rust 写出；Shapefile 读取和 CRS 转换可以使用原生 GDAL。它们不等同于安装 Python 的 netCDF4、rasterio 或 geopandas。</p>
-<h2 id="section-4">最小工作流</h2>
-<pre><code class="language-python">from klimapy import ETCCDI
-from klimapy.native import read_field
+<p>需要从 AI 客户端调用功能，请阅读 <a href="mcp.html">AI / MCP</a>。与社区算法的结果一致性及实测效率见 <a href="validation.html">验证与效率</a>。</p>
+<h2 id="section-3">开始使用</h2>
+<pre><code class="language-python">from klimapy.native import read_field
+from klimapy.etccdi import compute_indices
 
 pr = read_field(&quot;daily_pr.nc&quot;, &quot;pr&quot;, indexers={
     &quot;lat&quot;: slice(0, 16), &quot;lon&quot;: slice(0, 16)
 })
-result = ETCCDI.compute_indices(pr, [&quot;PRCPTOT&quot;, &quot;RX1DAY&quot;, &quot;CDD&quot;])
+result = compute_indices(pr, [&quot;PRCPTOT&quot;, &quot;RX1DAY&quot;, &quot;CDD&quot;])
 result[&quot;RX1DAY&quot;].to_netcdf(&quot;rx1day.nc&quot;)
 </code></pre>
-<p>这里的文件名和变量名是示例。输入应包含逐日时间坐标、真实经纬度和可识别的变量单位。输出路径必须尚不存在。</p>
-<h2 id="section-5">版本与使用边界</h2>
-<ol>
-<li><code>Field</code> 是内存中的 NumPy 数据容器，不模拟旧框架的任意运算、groupby 或 GIS accessor。</li>
-<li>计算分块控制工作集，不代表所有算法都支持惰性或无限规模计算；EOF 是内存内稠密分解。</li>
-<li>日尺度指标需明确单位、参考期、缺测比例和日历；不同软件默认值可能不同。</li>
-<li>本地真实数据回归使用明确的 CN05.1 空间切片，并非全量资料验收或普适精度保证。数据不随软件分发。</li>
-</ol>
-<h2 id="section-6">项目信息</h2>
+<p>首次使用请阅读 <a href="installation.html">安装</a> 与 <a href="data-model.html">Field 数据模型</a>。每个功能章节分别说明单位、日历、基准期、缺测规则和输出含义。</p>
+<h2 id="section-4">项目信息</h2>
 <ul>
-<li><a href="https://github.com/michalrees/Klimapy">GitHub 源代码</a></li>
-<li><a href="https://pypi.org/project/klimapy/">PyPI 安装包</a></li>
+<li><a href="https://github.com/michalrees/Klimapy">GitHub</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></li>
 <li><a href="https://github.com/michalrees/Klimapy/issues">问题反馈</a></li>
-<li>许可证：MIT；第三方 Rust 样条代码的许可证随包保留。</li>
-<li>联系：yuhaoran251@mails.ucas.ac.cn</li>
+<li>MIT License · 联系：yuhaoran251@mails.ucas.ac.cn</li>
 </ul>
-<p>如需在论文中引用，请记录软件版本、方法与参数，并引用采用的科学方法。项目目前未在此提供 DOI，不应自行编造软件 DOI 或文献条目。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="installation.html"><small>下一章</small>安装与环境 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">从哪里开始</a><a class="level-2" href="#section-3">设计思路</a><a class="level-2" href="#section-4">最小工作流</a><a class="level-2" href="#section-5">版本与使用边界</a><a class="level-2" href="#section-6">项目信息</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<p>引用时请记录软件版本、算法和参数，并引用所采用的科学方法。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="installation.html"><small>下一章</small>安装 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">功能分组</a><a class="level-2" href="#section-3">开始使用</a><a class="level-2" href="#section-4">项目信息</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

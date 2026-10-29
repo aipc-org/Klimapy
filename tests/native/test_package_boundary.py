@@ -15,8 +15,8 @@ class PackageBoundaryTests(unittest.TestCase):
             m.name
             for m in pkgutil.walk_packages(klimapy.__path__, klimapy.__name__ + ".")
         ]
-        self.assertTrue(any(n.endswith("ETCCDI.ETCCDI") for n in names))
-        self.assertTrue(any(n.endswith("Supporting_Tools.NCtoTIFF") for n in names))
+        self.assertTrue(any(n.endswith("etccdi.indices") for n in names))
+        self.assertTrue(any(n.endswith("tools.geotiff") for n in names))
         for name in names:
             # The C-ABI shared library is loaded by ctypes, not PyInit.
             if name.rsplit(".", 1)[-1] == "_native_core":

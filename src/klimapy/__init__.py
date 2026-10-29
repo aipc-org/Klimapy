@@ -6,13 +6,18 @@ from ._backends import backend_info
 from ._compat import install_aliases
 
 _MODULES = {
-    "Interpolation": ".Interpolation",
-    "BCSD": ".BCSD",
-    "ETCCDI": ".ETCCDI",
-    "PrecipitationVariability": ".PrecipitationVariability",
-    "Supporting_Tools": ".Supporting_Tools",
-    "BC": ".BCSD.BiasCorrection",
-    "SD": ".BCSD.SpatialDownscaling",
+    "etccdi": ".etccdi",
+    "downscaling": ".downscaling",
+    "precipitation": ".precipitation",
+    "statistics": ".statistics",
+    "tools": ".tools",
+    "ETCCDI": ".etccdi",
+    "Interpolation": ".statistics.interpolation",
+    "BCSD": ".downscaling.bcsd",
+    "BC": ".downscaling.bcsd.bias_correction",
+    "SD": ".downscaling.bcsd.spatial_downscaling",
+    "PrecipitationVariability": ".precipitation.variability",
+    "Supporting_Tools": ".tools",
     "native": ".native",
     "_accelerate": "._backends.rust",
     "_validation": "._core.validation",
@@ -24,7 +29,7 @@ _MODULES = {
 
 def __getattr__(name):
     if name in ("svd", "eof", "EOFResult"):
-        value = getattr(import_module(".native.linalg", __name__), name)
+        value = getattr(import_module(".statistics.linalg", __name__), name)
     elif name == "process_models":
         value = import_module(".workflows", __name__).process_models
     elif name in _MODULES:
@@ -38,6 +43,11 @@ def __getattr__(name):
 install_aliases()
 del install_aliases
 __all__ = [
+    "etccdi",
+    "downscaling",
+    "precipitation",
+    "statistics",
+    "tools",
     "Interpolation",
     "BC",
     "SD",

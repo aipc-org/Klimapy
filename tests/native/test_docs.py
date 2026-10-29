@@ -44,8 +44,9 @@ class DocumentationTests(unittest.TestCase):
         expected = [
             "getting-started",
             "etccdi",
-            "bcsd",
-            "variability",
+            "downscaling",
+            "precipitation",
+            "statistics",
             "tools",
             "development",
         ]

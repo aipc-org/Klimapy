@@ -1,36 +1,111 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：验证与比对。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/validation.html"><link rel="stylesheet" href="manual.css"><title>验证与比对 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a aria-current="page" href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考与开发 / 验证与比对</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">验证、参考库比对与原生发布</h1>
-<h2 id="section-2">三种检查分别报告</h2>
-<pre><code class="language-bash">conda run -n Test python tools/manage.py test
-conda run -n Test python tools/manage.py test --installed
-python tools/manage.py compare
-python tools/manage.py compare --installed
-</code></pre>
-<p><code>test</code> 只运行 <code>tests/native</code>：启动前验证 conda Test、允许的最小依赖和 Rust ABI，
-运行期间拦截旧库导入，零测试或跳过不能作为通过。包括所有生产 Python 模块的
-导入检查和静态导入审计。<code>--installed</code> 拒绝源码/可编辑包注入，检查真正 site-packages。</p>
-<p><code>compare</code> 在不同进程中运行 Test 生产实现和 Test1 独立参考。当前使用 CN05.1：
-2019—2020 Pre、2020—2021 Tmin/Tmax/Tm 的 6×8 陆地区域。覆盖文件值、变率、
-SVD/EOF、全部降水指标、温度计数/极值/GSL/百分位/bootstrap/持续事件、
-六种重映射、空间均值/多边形、样条和平滑、完整 BC→SD、GeoTIFF 独立读取。
-生成的粗网格模式是观测资料的明确 0.8 倍人工扰动，验证数值链路，不能作为真实
-模式预测能力的证据。合成边界/缺测/日历案例仍由单元测试补足。</p>
-<p>Test1 中使用 SciPy、NumPy、xarray、xclim、eofs 等参考库，绝不从生产结果反推期望值。
-比较记录容差、绝对误差、输入 SHA256、参考库版本、单位约定、Git 状态与加载位置。
-每次运行在 <code>outputs/cn05-comparison/run-*</code> 下创建独立目录；源数据和结果不进 Git。
-数据的 units 缺失时，当前用显式 mm/day、degC 约定；2019 Pre 的日期由用户确认修正。
-这不是对全部 39 GB 数据的全网格验证。缺少数据或 Test1 会报错，不静默跳过。</p>
-<p><code>check</code> 依次运行静态检查、Test 单元验收和本地真实比对；加 <code>--rust</code> 检查 Rust。
-公开 CI 只执行不含私有数据的原生单元范围，不宣称 CN05.1 本地比对已经远程通过。
-历史 tests 根目录中的旧框架接口用例是旧数据模型的迁移记录，不计入当前通过数；
-不能将当前通过数写成整库旧用例全部通过。</p>
-<h2 id="section-3">构建与分发</h2>
-<p>基础 Python 依赖仅 NumPy。历史 extra 已移除，参考库环境见
-<a href="comparison.html">Test1</a>。原生文件读写需要 libnetcdf/HDF5；可选矢量文件
-需要原生 GDAL。它们不随 wheel 打包。源码构建需要 Cargo，失败不回退。</p>
-<pre><code class="language-bash">python tools/manage.py build --rust on
-</code></pre>
-<p>本地已安装包检查与源码检查必须分别执行。wheel 应包含 Rust 动态库与 FITPACK
-许可；sdist 应包含 Rust 源码和 vendored 引擎，并且没有 data/outputs。
-平台矩阵和 manylinux 配置见 <code>.github/workflows/</code>；远程配置不等于已完成远程验收。
-所有工具均不自动提交、推送、创建标签或发布。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="backend.html"><small>上一章</small>Rust 引擎 ←</a><a href="comparison.html"><small>下一章</small>Test1 参考环境 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">三种检查分别报告</a><a class="level-2" href="#section-3">构建与分发</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：验证与效率。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/validation.html"><link rel="stylesheet" href="manual.css"><title>验证与效率 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a aria-current="page" href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考 / 验证与效率</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">验证与效率</h1>
+<h2 id="section-2">与社区算法的一致性</h2>
+<p>将相同数据、单位、日历、基准期和缺测规则输入 Klimapy 与社区算法，比较数值误差。比较的是统一口径下的结果，不把不同默认参数产生的差异直接判为错误。</p>
+<p>下表为效率测量所用六个任务的一致性结果。</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>对照算法</th>
+<th>最大绝对误差</th>
+<th>允许误差</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PRCPTOT</td>
+<td>xclim</td>
+<td>0</td>
+<td>rtol=1e-8, atol=1e-8</td>
+</tr>
+<tr>
+<td>RX5DAY</td>
+<td>xclim</td>
+<td>0</td>
+<td>rtol=1e-8, atol=1e-8</td>
+</tr>
+<tr>
+<td>双线性插值</td>
+<td>SciPy RegularGridInterpolator</td>
+<td>0</td>
+<td>rtol=1e-8, atol=1e-8</td>
+</tr>
+<tr>
+<td>SVD</td>
+<td>NumPy LAPACK</td>
+<td>5.91e-12</td>
+<td>rtol=1e-8, atol=1e-8</td>
+</tr>
+<tr>
+<td>EOF</td>
+<td>eofs</td>
+<td>8.19e-12</td>
+<td>rtol=1e-8, atol=1e-8</td>
+</tr>
+<tr>
+<td>月气候态</td>
+<td>xarray groupby</td>
+<td>0</td>
+<td>rtol=1e-8, atol=1e-8</td>
+</tr>
+</tbody>
+</table>
+<p>以上六个任务均在允许误差内。这不代表所有指标、所有日历或所有数据规模都已与其他软件完全一致。</p>
+<h2 id="section-3">计算效率</h2>
+<p><img src="../assets/efficiency.png" alt="Klimapy 与社区算法的实测耗时比" /></p>
+<p>倍数定义为 <strong>对照算法耗时 ÷ Klimapy 耗时</strong>。大于 1 表示 Klimapy 更快，小于 1 表示更慢；图中虚线为相同耗时。</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>Klimapy / ms</th>
+<th>对照算法 / ms</th>
+<th>耗时比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PRCPTOT</td>
+<td>1.822</td>
+<td>5.382</td>
+<td>2.95×</td>
+</tr>
+<tr>
+<td>RX5DAY</td>
+<td>1.905</td>
+<td>6.577</td>
+<td>3.45×</td>
+</tr>
+<tr>
+<td>双线性插值</td>
+<td>0.113</td>
+<td>0.066</td>
+<td>0.582×</td>
+</tr>
+<tr>
+<td>SVD</td>
+<td>280.091</td>
+<td>0.832</td>
+<td>0.00297×</td>
+</tr>
+<tr>
+<td>EOF</td>
+<td>292.889</td>
+<td>6.286</td>
+<td>0.0215×</td>
+</tr>
+<tr>
+<td>月气候态</td>
+<td>1.579</td>
+<td>2.654</td>
+<td>1.68×</td>
+</tr>
+</tbody>
+</table>
+<p>本次 PRCPTOT 和 RX5DAY 分别约快 2.95 倍和 3.45 倍。小型稠密矩阵的 SVD 与 EOF 目前慢于 NumPy 和 eofs，双线性插值也未体现优势。这些结果只适用于下述任务和硬件，不代表所有工作流或大型文件的整体性能。</p>
+<h2 id="section-4">测量设置</h2>
+<p>测量日期：2026-10-29。硬件：Intel(R) Core(TM) i5-14600K，Linux x86_64。输入为连续 731 日、6×8 格点的降水数据切片；双线性插值使用前 30 日，其余任务使用完整切片。月气候态对照使用两个明确的基准年。</p>
+<p>每项在单线程下预热 2 次，正式运行 7 次并取中位数。计时排除导入、进程启动和文件读取，保留公共接口的分配与结果组织成本；双线性插值包含网格权重构建。一致性检查与计时均基于同一份已载入内存的数组。</p>
+<h2 id="section-5">测试环境</h2>
+<p>一致性检查与测量使用以下第三方库：NumPy、xarray、xclim、SciPy 和 eofs。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="mcp.html"><small>上一章</small>AI 工具接入 ←</a><a href="api.html"><small>下一章</small>API 参考 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">与社区算法的一致性</a><a class="level-2" href="#section-3">计算效率</a><a class="level-2" href="#section-4">测量设置</a><a class="level-2" href="#section-5">测试环境</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

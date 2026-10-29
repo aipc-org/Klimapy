@@ -9,6 +9,7 @@ include benchmarks/results/reference-2026-10-19.json
 
 include AGENTS.md environment.yml
 prune data
+prune .vscode
 
 recursive-include rust/vendor *.rs *.md LICENSE-*
 include environment-comparison.yml

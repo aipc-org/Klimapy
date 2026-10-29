@@ -1,17 +1,17 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：极端气候指数。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/etccdi.html"><link rel="stylesheet" href="manual.css"><title>极端气候指数 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a aria-current="page" href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 功能指南 / 极端气候指数</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">ETCCDI 操作文档</h1>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：极端气候指数。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/etccdi.html"><link rel="stylesheet" href="manual.css"><title>极端气候指数 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a aria-current="page" href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / ETCCDI / 极端气候指数</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">ETCCDI 操作文档</h1>
 <h2 id="section-2">导入方式</h2>
-<pre><code class="language-python">import klimapy as klipy
+<pre><code class="language-python">from klimapy import etccdi
 </code></pre>
 <h2 id="section-3">调用方式</h2>
 <pre><code class="language-python"># 降水指标
-prcptot = klipy.ETCCDI.PRCPTOT(pr)
-rx5day = klipy.ETCCDI.RX5DAY(pr)
+prcptot = etccdi.PRCPTOT(pr)
+rx5day = etccdi.RX5DAY(pr)
 
 # 温度指标
-fd = klipy.ETCCDI.FD(tn)
-tx90p = klipy.ETCCDI.TX90p(tx, baseline_years=(1981, 2010))
+fd = etccdi.FD(tn)
+tx90p = etccdi.TX90p(tx, baseline_years=(1981, 2010))
 </code></pre>
-<p>本文档介绍 <code>klimapy</code> 中 <code>ETCCDI</code> 模块的使用方法。</p>
+<p>本文档介绍 <code>klimapy.etccdi</code> 模块的使用方法。</p>
 <h2 id="section-4">1. 模块说明</h2>
 <p>ETCCDI 用于计算极端气候指数，目前包含降水与温度两大类指标。</p>
 <p>降水指标主要包含 4 类：</p>
@@ -48,7 +48,7 @@ tx90p = klipy.ETCCDI.TX90p(tx, baseline_years=(1981, 2010))
 年度/月度结果默认要求 90% 的有效日，可通过 <code>min_valid_fraction</code> 调整。
 降水归一到 mm/day，温度归一到 degC；未知单位报错，无单位沿用旧输入约定。</p>
 <h2 id="section-7">4. 批量计算</h2>
-<pre><code class="language-python">result = klipy.ETCCDI.compute_indices(
+<pre><code class="language-python">result = etccdi.compute_indices(
     pr, ['PRCPTOT', 'RX1DAY', 'CDD', 'R95mm_days'],
     baseline_years=(1981, 2010), spatial_chunk_size=32,
 )
@@ -167,7 +167,7 @@ tx90p = klipy.ETCCDI.TX90p(tx, baseline_years=(1981, 2010))
 <p>含义：超过对应百分位阈值的降水总量，占全年总降水量的比重（0-1）。</p>
 <h2 id="section-15">7. 快速开始</h2>
 <pre><code class="language-python">from klimapy.native import read_field
-from klimapy.ETCCDI import (
+from klimapy.etccdi import (
     PRCPTOT, RX5DAY, CDD,
     R20mm_days, R20mm_ratio,
     R95mm_precipitation, R95mm_days, R95mm_ratio,
@@ -265,14 +265,12 @@ dtr.to_netcdf(&quot;DTR_monthly.nc&quot;)
 <li>结果建议保存为 NetCDF，便于后续统计与绘图。</li>
 <li>温度数据建议统一单位为 °C；若原始单位为 K，请先转换后再计算阈值类指标。</li>
 </ol>
-<p>计算口径和与旧版的差异见 <a href="migration.html">迁移说明</a>。</p>
-<p>指标完整性、标准口径差异和扩展建议见 <a href="https://github.com/michalrees/Klimapy/blob/main/docs/etccdi/coverage-audit.md">ETCCDI 覆盖检查</a>。</p>
 <h2 id="section-26">11. 标准修订与参数化接口</h2>
 <p>当前提供全部 27 项核心指标对应的计算入口；接口覆盖不等于已完成外部库逐项认证。
 保留原函数名，同时导出标准别名 <code>Rx1day</code>、<code>Rx5day</code>、<code>R10mm</code>、<code>R20mm</code>、<code>R95p</code>、<code>R99p</code>。
 本库 <code>R95pTOT</code>/<code>R99pTOT</code> 按 ETCCDI 定义为超百分位降水总量，单位 mm；
 不是 Climpact 同名的百分比贡献率。原 <code>*_ratio</code> 接口仍为全部降水分母、0–1 比例。</p>
-<pre><code class="language-python">from klimapy.ETCCDI import Rnnmm, RXnday, Rx5day, TX90p, compute_indices
+<pre><code class="language-python">from klimapy.etccdi import Rnnmm, RXnday, Rx5day, TX90p, compute_indices
 
 custom_days = Rnnmm(pr, threshold=30)       # &gt;= 30 mm/day 的年日数
 max_7day = RXnday(pr, window=7)             # 年最大连续 7 日累计，单位 mm
@@ -294,18 +292,20 @@ result = compute_indices(
 <li>温度百分位日数排除公历/365/366 日历的 2 月 29 日；360 日历保留该日。
 各库闰日策略可能不同，跨库对照必须统一该策略。</li>
 <li><code>bootstrap=False</code> 保留一次性阈值计算方式，适用于明确不需要基准期内校正的实验。</li>
-<li>分位数采用 <code>median_unbiased</code>（Hyndman–Fan type 8），有别于旧版本的 linear（type 7）。</li>
-<li>PRCPTOT 和 SDII 改用湿日降水和，会改变包含 0–1 mm 微量降水的旧结果。</li>
+<li>分位数采用 <code>median_unbiased</code>（Hyndman–Fan type 8），计算时请与参考结果统一分位数类型。</li>
+<li>PRCPTOT 和 SDII 使用湿日（≥1 mm）降水和，不纳入 0–1 mm 的微量降水。</li>
 <li><code>index_options</code> 为每项指标指定参数；不能覆盖输入数组或全局有效日比例。</li>
 </ul>
 <p>方法依据：<a href="https://etccdi.pacificclimate.org/list_27_indices.shtml">ETCCDI 官方定义</a>。
 bootstrap 替换步骤可与 <a href="https://xclim.readthedocs.io/en/stable/_modules/xclim/core/bootstrapping.html">xclim 实现说明</a>对照。
 尚未完成与外部库所有指标、所有日历的数值交叉验证。</p>
-<h2 id="section-27">原生迁移说明</h2>
-<p>所有数值内核由 Rust 执行，输入/输出统一为 Field；<code>compute_indices</code> 返回字段字典。
+<h2 id="section-27">输出与质量控制</h2>
+<p>输入/输出为 Field；<code>compute_indices</code> 返回字段字典。
 年度维度名为 year；月度维度名为 time，其坐标为月初 YYYYMMDD 整数。
 读取年度坐标使用 <code>result.coords['year']</code>，读取数值使用 <code>result.values</code>。
-<code>Field.time</code>/<code>TimeAxis</code> 可解码 CF 或 YYYYMMDD 时间，不依赖旧时间框架。
-温度月极值、月 DTR、百分位 type-8、闰日排除及年替代 bootstrap 沿用原有定义。
+<code>Field.time</code>/<code>TimeAxis</code> 可解码 CF 或 YYYYMMDD 时间，保持时间的日历定义。
+温度月极值、月 DTR、百分位 type-8、闰日排除及年替代 bootstrap 按上述规则计算。
 与库同名指标比对时须统一时间频率、阈值关系和 bootstrap 策略。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="quickstart.html"><small>上一章</small>快速上手 ←</a><a href="interpolation.html"><small>下一章</small>空间插值与重映射 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">导入方式</a><a class="level-2" href="#section-3">调用方式</a><a class="level-2" href="#section-4">1. 模块说明</a><a class="level-2" href="#section-5">2. 安装</a><a class="level-2" href="#section-6">3. 输入数据要求</a><a class="level-2" href="#section-7">4. 批量计算</a><a class="level-2" href="#section-8">5. 基准期参数说明（百分位类函数）</a><a class="level-2" href="#section-9">6. 主要函数清单</a><a class="level-3" href="#section-10">6.0 温度指数</a><a class="level-3" href="#section-11">6.1 基础降水指数</a><a class="level-3" href="#section-12">6.2 固定阈值指数</a><a class="level-3" href="#section-13">6.3 百分位阈值指数</a><a class="level-3" href="#section-14">6.4 百分位降水占比指数</a><a class="level-2" href="#section-15">7. 快速开始</a><a class="level-2" href="#section-16">8. 输出说明</a><a class="level-2" href="#section-17">9. 常见问题</a><a class="level-3" href="#section-18">9.1 报错：输入数据必须包含 time 维度</a><a class="level-3" href="#section-19">9.2 报错：无效的降水变量名</a><a class="level-3" href="#section-20">9.3 报错：baseline_years 不能为空</a><a class="level-3" href="#section-21">9.4 报错：未找到某基准期年的数据</a><a class="level-3" href="#section-22">9.5 结果中出现较多 NaN</a><a class="level-3" href="#section-23">9.6 温度百分位指标报 dayofyear 对齐错误</a><a class="level-3" href="#section-24">9.7 GSL 在南半球结果异常</a><a class="level-2" href="#section-25">10. 建议</a><a class="level-2" href="#section-26">11. 标准修订与参数化接口</a><a class="level-2" href="#section-27">原生迁移说明</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<p>每格点在报告期内默认至少需要 90% 的有效日。月度结果以实际月份长度为分母，年度结果以对应日历年长度为分母；缺失日期补为 NaN，全缺失格点始终为 NaN。显式设 min_valid_fraction=0 可以研究短片段，但不能将片段结果解释为完整年度。</p>
+<p>阈值计算前，降水归一为 mm/day，温度归一为 degC。支持常见降水通量与 Celsius/Kelvin 单位；未知单位会报错。缺失单位时采用降水 mm/day、温度 degC 的输入约定，并在结果属性记录假设。跨日累计或仪器重置需要先处理。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="quickstart.html"><small>上一章</small>快速上手 ←</a><a href="statistical-downscaling.html"><small>下一章</small>统计降尺度 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">导入方式</a><a class="level-2" href="#section-3">调用方式</a><a class="level-2" href="#section-4">1. 模块说明</a><a class="level-2" href="#section-5">2. 安装</a><a class="level-2" href="#section-6">3. 输入数据要求</a><a class="level-2" href="#section-7">4. 批量计算</a><a class="level-2" href="#section-8">5. 基准期参数说明（百分位类函数）</a><a class="level-2" href="#section-9">6. 主要函数清单</a><a class="level-3" href="#section-10">6.0 温度指数</a><a class="level-3" href="#section-11">6.1 基础降水指数</a><a class="level-3" href="#section-12">6.2 固定阈值指数</a><a class="level-3" href="#section-13">6.3 百分位阈值指数</a><a class="level-3" href="#section-14">6.4 百分位降水占比指数</a><a class="level-2" href="#section-15">7. 快速开始</a><a class="level-2" href="#section-16">8. 输出说明</a><a class="level-2" href="#section-17">9. 常见问题</a><a class="level-3" href="#section-18">9.1 报错：输入数据必须包含 time 维度</a><a class="level-3" href="#section-19">9.2 报错：无效的降水变量名</a><a class="level-3" href="#section-20">9.3 报错：baseline_years 不能为空</a><a class="level-3" href="#section-21">9.4 报错：未找到某基准期年的数据</a><a class="level-3" href="#section-22">9.5 结果中出现较多 NaN</a><a class="level-3" href="#section-23">9.6 温度百分位指标报 dayofyear 对齐错误</a><a class="level-3" href="#section-24">9.7 GSL 在南半球结果异常</a><a class="level-2" href="#section-25">10. 建议</a><a class="level-2" href="#section-26">11. 标准修订与参数化接口</a><a class="level-2" href="#section-27">输出与质量控制</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

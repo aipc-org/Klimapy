@@ -12,7 +12,7 @@ from .._backends.rust import (
     annual_variability,
 )
 from .io import Dataset, open_dataset
-from .linalg import svd, eof, EOFResult
+from ..statistics.linalg import svd, eof, EOFResult
 from .field import Field, TimeAxis, read_field
 
 __all__ = [

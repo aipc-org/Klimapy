@@ -1,44 +1,40 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：快速上手。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/quickstart.html"><link rel="stylesheet" href="manual.css"><title>快速上手 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a aria-current="page" href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / 快速上手</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">安装与快速开始</h1>
-<p>基础依赖只有 NumPy，Rust 是必需引擎。源码构建需要 Cargo；原生文件接口需要系统
-libnetcdf/HDF5。所有生产功能均已改用原生接口，不需要旧 Python 数据框架。</p>
-<pre><code class="language-bash">conda env create -f environment.yml
-conda run -n Test python -m pip install --no-deps --no-build-isolation .
-conda run -n Test python tools/manage.py test
-</code></pre>
-<h2 id="section-2">数据、指标和降水变率</h2>
-<pre><code class="language-python">import klimapy as klipy
-from klimapy.native import read_field
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：快速上手。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/quickstart.html"><link rel="stylesheet" href="manual.css"><title>快速上手 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a aria-current="page" href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / 快速上手</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">快速上手</h1>
+<h2 id="section-2">读取与计算极端指数</h2>
+<pre><code class="language-python">from klimapy.native import read_field
+from klimapy.etccdi import compute_indices
 
-pr = read_field('daily_pr.nc', 'pr',
-                indexers={'lat': slice(0, 16), 'lon': slice(0, 16)})
-print(pr.values.shape, pr.dims, pr.coords, pr.attrs)
-indices = klipy.ETCCDI.compute_indices(
-    pr, ['PRCPTOT', 'RX1DAY', 'CDD', 'R95mm_days'],
-    baseline_years=(1981, 2010), spatial_chunk_size=8)
-indices['RX1DAY'].to_netcdf('rx1day.nc')
-annual = klipy.PrecipitationVariability.compute_precip_variability(
-    pr, baseline_years=(1981, 2010), spatial_chunk_size=8)
+pr = read_field(&quot;daily_pr.nc&quot;, &quot;pr&quot;, indexers={
+    &quot;lat&quot;: slice(0, 16), &quot;lon&quot;: slice(0, 16)
+})
+indices = compute_indices(pr, [&quot;PRCPTOT&quot;, &quot;RX1DAY&quot;, &quot;CDD&quot;])
+indices[&quot;RX1DAY&quot;].to_netcdf(&quot;rx1day.nc&quot;)
 </code></pre>
-<p><code>Field</code> 是明确的 NumPy 数据与坐标容器，<code>isel</code> 支持按维度位置选取，批量指标返回字典。
-它不模拟旧框架的任意运算。先用 <code>read_field(indexers=...)</code> 限制文件读取范围；
-<code>spatial_chunk_size</code> 限制计算工作集，不会将已整体读取的数组变成惰性文件对象。
-时间保持 CF 数值及 units/calendar；<code>pr.time.dates()</code> 返回年月日与绝对日序。
-降水变率 <code>baseline_years=None</code> 使用全时段气候态。</p>
-<h2 id="section-3">BC、SD 和批处理</h2>
-<pre><code class="language-python">jobs = [dict(obs_path='obs.nc', gcm_hist_path='historical.nc', gcm_fut_path='future.nc',
-             model_name='example', ref_start_year=1981, ref_end_year=2010)]
-report = klipy.process_models(jobs, output_dir='outputs', strict=True,
-    bc_options={'time_chunk_size': 64, 'work_dir': 'work/example'},
-    sd_options={'time_chunk_size': 16, 'spatial_chunk_size': 16})
+<p>Field 保存数值、维度、坐标和属性。批量指标返回字典，每个值都是独立 Field。示例变量名和路径需替换为自己的数据。</p>
+<h2 id="section-3">计算气候态</h2>
+<pre><code class="language-python">from klimapy.statistics import compute_climatology
+
+monthly = compute_climatology(
+    &quot;daily_pr.nc&quot;, variable=&quot;pr&quot;,
+    baseline_years=(1991, 2020), group=&quot;monthly&quot;
+)
 </code></pre>
-<p>这些文件流程保留按时间块/空间行读取。BC 的磁盘缓冲属于调用者；组合流程会在 SD
-结束后释放 BC 输出。独立调用 BC 时应在消费结果后显式 <code>close_result</code>。</p>
-<h2 id="section-4">验收</h2>
-<pre><code class="language-bash">python tools/manage.py compare               # CN05.1：Test 原生 + Test1 独立参考
-python tools/manage.py test --installed      # 检查真正安装包
-python tools/manage.py compare --installed   # 安装包的真实数据比对
+<p>省略基准期时按当前年份选择最近的完整十年终止 30 年，2026 年对应 1991–2020。数据须包含所有参考年份。</p>
+<h2 id="section-4">降水变率与趋势</h2>
+<pre><code class="language-python">from klimapy.precipitation import (
+    compute_precip_variability, annual_precip_variability_trend
+)
+
+annual = compute_precip_variability(pr)
+trend = annual_precip_variability_trend(
+    annual.values, annual.coords[&quot;year&quot;]
+)
 </code></pre>
-<p><code>data/</code> 和 <code>outputs/</code> 不进 Git；缺少本地数据或 Test1 会明确报错。
-CI 单元验收不冒充本地真实数据验收。详见 <a href="validation.html">验证说明</a>、
-<a href="https://github.com/michalrees/Klimapy/blob/main/docs/development/source-layout.md">源码结构</a> 和 <a href="https://github.com/michalrees/Klimapy/blob/main/AGENTS.md">长期约定</a>。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="data-model.html"><small>上一章</small>Field 与数据入口 ←</a><a href="etccdi.html"><small>下一章</small>极端气候指数 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">数据、指标和降水变率</a><a class="level-2" href="#section-3">BC、SD 和批处理</a><a class="level-2" href="#section-4">验收</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<p>变率先去除年循环和线性趋势，再按年计算总体标准差。趋势单位为 %/10 年；至少需要两个有效年份。</p>
+<h2 id="section-5">保存结果</h2>
+<pre><code class="language-python">from klimapy.tools import to_csv, to_netcdf
+
+to_netcdf(monthly, &quot;monthly_climatology.nc&quot;)
+to_csv(monthly, &quot;monthly_climatology.csv&quot;)
+</code></pre>
+<p>对于大型文件，读取时先限制区域；文件气候态可以直接使用路径按时间块计算。各函数的有效日、缺测和网格规则见功能章节。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="data-model.html"><small>上一章</small>Field 与数据入口 ←</a><a href="etccdi.html"><small>下一章</small>极端气候指数 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">读取与计算极端指数</a><a class="level-2" href="#section-3">计算气候态</a><a class="level-2" href="#section-4">降水变率与趋势</a><a class="level-2" href="#section-5">保存结果</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

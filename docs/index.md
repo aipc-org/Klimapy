@@ -1,30 +1,30 @@
 # Klimapy 文档
 
-文档按功能使用二级目录。后续功能应放入对应目录，或新增同级功能目录。
+文档按功能分为五组，每组对应一个目录。新增功能时放入相应目录，或新增同级功能目录并在本索引增加入口。
 
-| 目录 | 内容 |
-| --- | --- |
-| [getting-started](getting-started/quickstart.md) | 安装、导入、基本示例 |
-| [interpolation](interpolation/SpatialInterpolation.md) | 双线性、守恒、最近邻和局部 Patch 插值 |
-| [etccdi](etccdi/ETCCDI.md) | 极端指数、批量指标计算 |
-| [bcsd](bcsd/BiasCorrectionSpatialDownscaling.md) | [Bias Correction](bcsd/BiasCorrection.md) 偏差校正、[Spatial Downscaling](bcsd/SpatialDownscaling.md) 空间降尺度与一体化流程 |
-| [linalg](linalg/SVD-EOF.md) | Rust SVD、加权 EOF 与原场重建 |
-| [variability](variability/PrecipVariability.md) | 降水变率与趋势 |
-| [tools](tools/CSM.md) | 空间统计和 [GeoTIFF 导出](tools/NCtoTIFF.md) |
-| [development](development/quality-and-migration.md) | 计算口径、兼容迁移、[Rust 后端](development/RustBackend.md)、[验证与发布](development/validation.md)、[源码结构](development/source-layout.md) |
+| 分组 | 目录 | 内容 |
+| --- | --- | --- |
+| ETCCDI | [etccdi](etccdi/indices.md) | 极端气候指数与批量指标计算；[覆盖范围](etccdi/coverage-audit.md) |
+| 统计降尺度 | [downscaling](downscaling/bcsd.md) | BCSD：[偏差校正](downscaling/bcsd/bias_correction.md)、[空间分解](downscaling/bcsd/spatial_downscaling.md)与[方法原理](downscaling/bcsd/method.md) |
+| 降水 | [precipitation](precipitation/variability.md) | 降水变率与趋势 |
+| 统计分析 | [statistics](statistics/interpolation.md) | [空间插值与重映射](statistics/interpolation.md)、[EOF 与 SVD](statistics/linalg.md)、[空间统计](statistics/spatial.md)、[气候态计算](statistics/climatology.md) |
+| 辅助工具 | [tools](tools/storage.md) | [数据存储与导出](tools/storage.md)、[GeoTIFF 导出](tools/geotiff.md)、[CSV 导出](tools/csv.md) |
 
-新文档使用相对链接，并在本索引增加入口。测试会检查本地 Markdown 链接是否存在。
+入门材料见 [getting-started](getting-started/quickstart.md)。
 
 仓库维护：[贡献约定](../CONTRIBUTING.md) · [更新记录](../CHANGELOG.md) · [性能测量](../benchmarks/README.md)。
 
-参考库交叉比对：[Test1 环境](development/comparison-environment.md)（独立于最小验收环境 Test）。
+## 开发者资料
 
-## 文档维护约定
+以下文档面向维护者，记录构建、测试与源码结构：
 
-每个功能使用 `docs/<功能>/` 二级目录。新增功能时扩展相应目录；
-独立功能可新增同级目录，并在本索引添加入口。
-通用安装与示例放在 `getting-started/`，测试、性能、构建与计算口径放在 `development/`。
-文档间使用相对 Markdown 链接，文件名大小写须与实际路径一致。
+- [源码结构](development/source-layout.md)
+- [Rust 后端](development/RustBackend.md)
+- [验证与测试](development/validation.md)
+- [测试环境](development/comparison-environment.md)
 
-BC 和 SD 统一放在 `bcsd/`，文件名与实现保持一致：
-`BiasCorrection.md`、`SpatialDownscaling.md`、`BiasCorrectionSpatialDownscaling.md`。
+## 文档约定
+
+- 每个功能的说明写在对应功能目录中，包含输入、输出、默认参数、计算口径与质量控制规则。
+- 文档之间使用相对 Markdown 链接，文件名大小写须与实际路径一致。
+- 测试会检查本地 Markdown 链接是否存在。

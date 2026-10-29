@@ -1,39 +1,29 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：安装与环境。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/installation.html"><link rel="stylesheet" href="manual.css"><title>安装与环境 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a aria-current="page" href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / 安装与环境</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">安装与环境</h1>
-<h2 id="section-2">安装发布版</h2>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：安装。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/installation.html"><link rel="stylesheet" href="manual.css"><title>安装 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a aria-current="page" href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / 安装</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">安装</h1>
+<h2 id="section-2">pip 安装</h2>
 <pre><code class="language-bash">python -m pip install --upgrade klimapy
 python -m pip show klimapy
 </code></pre>
-<p>本手册对应 1.1.0。确认 PyPI 已出现该版本后可固定版本安装：</p>
-<pre><code class="language-bash">python -m pip install klimapy==1.1.0
-</code></pre>
-<p>原生 wheel 包含必需的 Rust 计算引擎；如果当前系统没有匹配的 wheel，pip 会尝试从源码构建，此时需要 Cargo。Python 要求以包元数据为准（当前声明 Python 3.8 及以上）。</p>
-<h2 id="section-3">系统文件运行库</h2>
-<p>NumPy 是 Python 运行依赖。NetCDF 数据入口还需要原生 libnetcdf / HDF5，wheel 不负责捆绑整个文件运行库。</p>
-<p>Ubuntu / Debian 示例：</p>
+<p>支持 Python 3.8 及以上，Python 运行依赖为 NumPy。优先安装匹配当前系统的 wheel。</p>
+<h2 id="section-3">NetCDF 文件运行库</h2>
+<p>NetCDF 文件入口需要系统 libnetcdf 及其 HDF5 依赖。Ubuntu / Debian 示例：</p>
 <pre><code class="language-bash">sudo apt-get install libnetcdf-dev
 </code></pre>
-<p>macOS 可使用系统包管理器安装 <code>netcdf</code>。Windows 需要能加载的 NetCDF C DLL 及其依赖；必要时用 <code>KLIMAPY_NETCDF_LIBRARY</code> 指向实际文件路径。不要把安装 Python 的 netCDF4 包视为替代方案。</p>
-<p>读取 Shapefile 和转换 CRS 另需原生 GDAL；只使用 WGS84 GeoJSON 和 GeoTIFF 写出时不需要 Python GIS 包。</p>
-<h2 id="section-4">从源码安装</h2>
+<p>macOS 可使用 <code>brew install netcdf</code>。Windows 需要 NetCDF C DLL 及其依赖；自动发现失败时，可用 <code>KLIMAPY_NETCDF_LIBRARY</code> 指定动态库文件。</p>
+<p>Shapefile 读取与 CRS 转换还需原生 GDAL；WGS84 GeoJSON 掩膜和 GeoTIFF 写出不要求 Python GIS 包。</p>
+<h2 id="section-4">源码安装</h2>
 <pre><code class="language-bash">git clone https://github.com/michalrees/Klimapy.git
 cd Klimapy
 python -m pip install .
 </code></pre>
-<p>先安装 Rust / Cargo。Rust 引擎不可禁用，<code>KLIMAPY_BUILD_RUST=0</code> 不再受支持。</p>
-<h2 id="section-5">检查安装</h2>
+<p>从源码构建需要安装 Rust / Cargo。安装完成后检查版本：</p>
 <pre><code class="language-python">from importlib.metadata import version
 import klimapy
 
 print(version(&quot;klimapy&quot;))
 print(klimapy.__file__)
-print(klimapy.backend_info())
 </code></pre>
-<p>核对版本、包路径和 Rust 可用状态。若 <code>__file__</code> 指向意外的源码目录，先检查工作目录、PYTHONPATH 和 editable 安装。</p>
-<h2 id="section-6">项目验收环境 Test</h2>
-<p>维护者的日常验收固定使用专用 conda <code>Test</code>，只保留 Python、NumPy、Klimapy 与必要构建工具：</p>
-<pre><code class="language-bash">conda env create -f environment.yml
-conda run -n Test python -m pip install --no-deps --no-build-isolation .
-conda run -n Test python tools/manage.py test --installed
+<h2 id="section-5">功能入口</h2>
+<pre><code class="language-python">from klimapy import etccdi, downscaling, precipitation, statistics, tools
 </code></pre>
-<p>这是项目的开发验收约定，不要求所有终端用户都使用同名环境。不要为了运行旧测试而向 Test 安装历史依赖；参考库统一放入独立的 Test1。<a href="validation.html">验证与比对</a> 解释源码测试、安装包测试和真实数据比对的区别。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="index.html"><small>上一章</small>官方手册 ←</a><a href="data-model.html"><small>下一章</small>Field 与数据入口 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">安装发布版</a><a class="level-2" href="#section-3">系统文件运行库</a><a class="level-2" href="#section-4">从源码安装</a><a class="level-2" href="#section-5">检查安装</a><a class="level-2" href="#section-6">项目验收环境 Test</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<p>五个模块分别对应极端指数、统计降尺度、降水分析、统计分析、存储与导出。AI 客户端接入方式见 <a href="mcp.html">MCP</a>。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="index.html"><small>上一章</small>官方手册 ←</a><a href="data-model.html"><small>下一章</small>Field 与数据入口 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">pip 安装</a><a class="level-2" href="#section-3">NetCDF 文件运行库</a><a class="level-2" href="#section-4">源码安装</a><a class="level-2" href="#section-5">功能入口</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

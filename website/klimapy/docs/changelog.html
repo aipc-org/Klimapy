@@ -1,92 +1,13 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：更新记录。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/changelog.html"><link rel="stylesheet" href="manual.css"><title>更新记录 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a aria-current="page" href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考与开发 / 更新记录</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">Changelog</h1>
-<h2 id="section-2">1.1.0 — 2026-10-29</h2>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：更新记录。1.2.0 气候分析的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/changelog.html"><link rel="stylesheet" href="manual.css"><title>更新记录 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.2.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>ETCCDI</h3><a href="etccdi.html">极端气候指数</a><h3>统计降尺度</h3><a href="statistical-downscaling.html">统计降尺度</a><a href="bcsd.html">BCSD</a><a class="method-child" href="bias-correction.html">偏差校正函数</a><a class="method-child" href="downscaling.html">空间分解函数</a><a class="method-child" href="bcsd-method.html">BCSD 方法原理</a><h3>降水</h3><a href="variability.html">降水变率与趋势</a><h3>统计分析</h3><a href="statistics.html">统计分析</a><a href="interpolation.html">空间插值与重映射</a><a href="linalg.html">EOF 与 SVD</a><a href="spatial.html">空间统计</a><a href="climatology.html">气候态计算</a><h3>辅助工具</h3><a href="storage.html">数据存储与导出</a><a href="geotiff.html">GeoTIFF 导出</a><a href="csv.html">CSV 导出</a><h3>AI / MCP</h3><a href="mcp.html">AI 工具接入</a><h3>参考</h3><a href="validation.html">验证与效率</a><a href="api.html">API 参考</a><a href="faq.html">常见问题</a><a aria-current="page" href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考 / 更新记录</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>Klimapy 1.2.0</b> · 变量、单位、日历和质量控制规则见相应函数说明。</div><article><h1 id="section-1">更新记录</h1>
+<h2 id="section-2">1.2.0</h2>
 <ul>
-<li>Migrate production calculations to the required Rust engine, with NumPy-only Python interfaces.</li>
-<li>Introduce native Field, calendar and NetCDF entry points; remove legacy dependency extras.</li>
-<li>Retain ETCCDI, BC/SD, remapping, variability, spatial tools and SVD/EOF workflows.</li>
-<li>Add the official website and manual, and unify the project description.</li>
-<li>This release changes input/output objects to Field and dictionaries; see the migration guide.</li>
+<li>按 ETCCDI、统计降尺度、降水、统计分析、辅助工具五组组织功能。</li>
+<li>统计降尺度中的首个方法为 BCSD，可分阶段进行偏差校正与空间分解。</li>
+<li>新增气候态计算，默认采用最近的完整十年终止 30 年基准期。</li>
+<li>新增 CSV 长表导出与统一 NetCDF 保存入口。</li>
+<li>新增本地 MCP 工具，支持数据查看、指标、气候态及 CSV 导出。</li>
+<li>各功能章节分别说明计算口径和质量控制；验证页展示社区参考一致性与实测效率。</li>
 </ul>
-<h2 id="section-3">1.1.0 开发过程记录（以下条目已并入本次发布）</h2>
-<h2 id="section-4">开发记录：全功能原生迁移（2026-10-29）</h2>
-<ul>
-<li>移除全部生产代码对历史 Python 框架的导入及 legacy/io/gis/parallel extras；保留功能并转为必需 Rust 引擎。</li>
-<li>高层输入/输出统一为 Field；批量指标返回字段字典，旧框架对象接口不再支持。BC/SD 文件调用路径及主要函数名保留。</li>
-<li>ETCCDI 分组、滚动窗口、type-8 阈值、温度 bootstrap 和 GSL，六种通用重映射，空间均值/几何掩膜/GeoTIFF 均已原生化。</li>
-<li>BC 使用许可清晰、带可审查控制流修复的纯 Rust FITPACK；匹配 Test1 SciPy 1.18.1 的样条工作区策略。SD 的谐波平滑和均值也在 Rust 执行。</li>
-<li>ABI 升为 4；旧本地动态库和已安装 wheel 需要重建。FITPACK 许可随 wheel/sdist 分发。</li>
-<li>新增 CN05.1 本地真实数据比对与输入哈希、版本、误差记录；Test 和 Test1 分进程执行，不上传私有数据。</li>
-<li>data/work/outputs 从 Git 和分发包排除。2019 Pre 时间起点只按用户确认修正项目副本，1961—2018 和数据源不变。</li>
-<li>Test 原生验收、源码真实比对和安装包比对分别报告；当前空间切片不代表全量数据或远程全平台验收。</li>
-</ul>
-<h2 id="section-5">开发记录：SVD、EOF 与专用 Test 环境</h2>
-<ul>
-<li>新增 Rust 紧致 SVD、面积加权 EOF、方差贡献率和原场重建；仅需 NumPy。</li>
-<li>新建 conda Test 最小环境；所有默认验收和基准自动使用 Test，检查并拦截历史依赖。</li>
-<li>新增 environment.yml 与 tests/native，区分待迁移兼容测试与最小环境验收。</li>
-<li>长期架构与测试约束写入 AGENTS.md；构建工具和旧依赖不进入 Test。</li>
-</ul>
-<h2 id="section-6">开发记录：Rust 引擎与原生数据入口</h2>
-<ul>
-<li>Rust 变为必需计算引擎，移除已迁移算子的 Python 运行回退；旧 auto 仅为 rust 的兼容值。</li>
-<li>BC/SD 权重计划、空间块计算、气候态累计和融合 SD 重建移入 Rust。</li>
-<li>季节异常和分组标准差移入 Rust；去趋势、年度趋势及事件长度统一走 Rust。</li>
-<li>新增 klimapy.native，无需 xarray/netCDF4-Python 的数据模型和 libnetcdf 分块读写。</li>
-<li>NumPy 为基础 Python 依赖；迁移期间曾将历史高层接口依赖移至 legacy extra（最终在 1.1.0 移除该 extra），源码构建要求 Cargo。</li>
-<li>既有三项数值问题修复保留；方法边界与尚未迁移范围见 RustBackend 文档。</li>
-</ul>
-<h2 id="section-7">迁移过程记录</h2>
-<h3 id="section-8">不兼容变更</h3>
-<ul>
-<li>
-<p>ETCCDI 的 PRCPTOT/SDII 改为湿日降水口径；RX5DAY 纳入跨年窗口。</p>
-</li>
-<li>
-<p>温度百分位日数默认基准期内 bootstrap，至少需要两个基准年；分位数改为 type 8。</p>
-</li>
-<li>
-<p>移除降水变率旧拼写包及兼容转发，只使用 <code>klimapy.PrecipitationVariability</code>。</p>
-</li>
-<li>
-<p>显式基准期现在实际参与降水变率气候态计算；默认 None 保持全时段行为。</p>
-</li>
-<li>
-<p>指标默认要求 90% 有效日；全缺失、缺失日期及单位处理已修正。</p>
-</li>
-<li>
-<p>BC 按实际参考日期匹配并保留完整历史输出；输出坐标统一为 time/lat/lon。</p>
-</li>
-</ul>
-<p>计算差异详见 <a href="migration.html">迁移说明</a>。</p>
-<h3 id="section-9">新增与改进</h3>
-<ul>
-<li>
-<p>新增 Interpolation 子包，支持保留网格、双线性、一/二阶守恒、最近邻及局部二次 Patch。</p>
-</li>
-<li>
-<p>ETCCDI 新增 Rnnmm、RXnday、标准别名、降水极值年/月频率和批处理逐指标参数。</p>
-</li>
-<li>
-<p>移除根目录快速上手迁移提示；文档目录约定并入 <code>docs/index.md</code>，删除重复的 <code>docs/README.md</code>。</p>
-</li>
-<li>
-<p>BC、SD 文档统一归入 <code>docs/bcsd/</code>，文档文件名与实现保持全称一致。</p>
-</li>
-<li>
-<p>BC、SD 实现统一归入 <code>BCSD/</code>，使用 <code>BiasCorrection.py</code>、<code>SpatialDownscaling.py</code> 和 <code>BiasCorrectionSpatialDownscaling.py</code> 全称文件名；保留已有调用入口。</p>
-</li>
-<li>
-<p>可选 Rust 数值内核、批量指标、多模型处理、分块计算与 NetCDF 写出。</p>
-</li>
-<li>
-<p>GIS、NetCDF4 和 Dask 可选依赖；功能文档与源码分层组织。</p>
-</li>
-<li>
-<p>统一开发命令、独立性能测量与环境记录，归档早期 Rust 原型。</p>
-</li>
-<li>
-<p>发布前强制通过 Python、Rust、多平台、manylinux 和安装包测试。</p>
-</li>
-</ul>
-<p>以上迁移与改进现统一归入 1.1.0。</p>
-</article><nav class="pager" aria-label="章节翻页"><a href="contributing.html"><small>上一章</small>参与贡献 ←</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">1.1.0 — 2026-10-29</a><a class="level-2" href="#section-3">1.1.0 开发过程记录（以下条目已并入本次发布）</a><a class="level-2" href="#section-4">开发记录：全功能原生迁移（2026-10-29）</a><a class="level-2" href="#section-5">开发记录：SVD、EOF 与专用 Test 环境</a><a class="level-2" href="#section-6">开发记录：Rust 引擎与原生数据入口</a><a class="level-2" href="#section-7">迁移过程记录</a><a class="level-3" href="#section-8">不兼容变更</a><a class="level-3" href="#section-9">新增与改进</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
+<h2 id="section-3">1.1.0</h2>
+<p>提供 Field 数据模型、NetCDF 原生数据入口、极端指数、BCSD、网格重映射、降水变率、空间统计、GeoTIFF 及 SVD/EOF 分析。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="faq.html"><small>上一章</small>常见问题 ←</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">1.2.0</a><a class="level-2" href="#section-3">1.1.0</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>
