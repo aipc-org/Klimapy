@@ -391,6 +391,7 @@ pub unsafe extern "C" fn kl_nc_read(
     }
     check!((a.get)(g, v, start, count, output));
     let mut missing = Vec::new();
+    let mut explicit_fill = false;
     for name in [c"_FillValue", c"missing_value"] {
         let (mut k, mut len) = (0, 0);
         if (a.att)(g, v, name.as_ptr(), &mut k, &mut len) == 0 {
@@ -399,23 +400,27 @@ pub unsafe extern "C" fn kl_nc_read(
             }
             let mut vals = vec![0.0; len];
             check!((a.get_att)(g, v, name.as_ptr(), vals.as_mut_ptr()));
+            explicit_fill |= name == c"_FillValue";
             missing.extend(vals);
         }
     }
-    let (mut nofill, mut raw) = (0, [0u64; 2]);
-    if (a.fill)(g, v, &mut nofill, raw.as_mut_ptr().cast()) == 0 && nofill == 0 {
-        let p = raw.as_ptr();
+    // The explicit attribute is authoritative. Some older libnetcdf releases
+    // leave the value buffer untouched in nc_inq_var_fill after reopening a
+    // compressed variable. Never interpret a zero-initialized buffer as a fill
+    // value: use the documented type defaults only when no attribute exists.
+    let mut nofill = -1;
+    if !explicit_fill && (a.fill)(g, v, &mut nofill, std::ptr::null_mut()) == 0 && nofill == 0 {
         let fill = match kind {
-            1 => *p.cast::<i8>() as f64,
-            3 => *p.cast::<i16>() as f64,
-            4 => *p.cast::<i32>() as f64,
-            5 => *p.cast::<f32>() as f64,
-            6 => *p.cast::<f64>(),
-            7 => *p.cast::<u8>() as f64,
-            8 => *p.cast::<u16>() as f64,
-            9 => *p.cast::<u32>() as f64,
-            10 => *p.cast::<i64>() as f64,
-            11 => *p as f64,
+            1 => -127.0,
+            3 => -32767.0,
+            4 => -2147483647.0,
+            5 => 9.969_21e36_f32 as f64,
+            6 => 9.969_209_968_386_869e36,
+            7 => 255.0,
+            8 => 65535.0,
+            9 => 4294967295.0,
+            10 => -9223372036854775806_i64 as f64,
+            11 => 18446744073709551614_u64 as f64,
             _ => return INVALID,
         };
         missing.push(fill);

@@ -10,6 +10,7 @@ from functools import lru_cache
 import os
 from pathlib import Path
 import threading
+import sys
 
 import numpy as np
 
@@ -88,6 +89,16 @@ def _io_library():
         fn.argtypes, fn.restype = args, ct.c_int
     lib.kl_nc_error.argtypes, lib.kl_nc_error.restype = [ct.c_int], ct.c_char_p
     library = os.environ.get("KLIMAPY_NETCDF_LIBRARY") or find_library("netcdf")
+    if not library and sys.platform == "darwin":
+        # ctypes discovery can miss Homebrew outside dyld's search paths.
+        for prefix in ("/opt/homebrew", "/usr/local"):
+            for relative in ("lib/libnetcdf.dylib", "opt/netcdf/lib/libnetcdf.dylib"):
+                candidate = Path(prefix) / relative
+                if candidate.is_file():
+                    library = str(candidate)
+                    break
+            if library:
+                break
     if not library:
         raise RuntimeError(
             "libnetcdf not found; set KLIMAPY_NETCDF_LIBRARY to its shared-library path"

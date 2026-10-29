@@ -52,6 +52,39 @@ class NativeIOTests(TestCase):
             with self.assertRaises(OSError):
                 Dataset(path, "x")
 
+    def test_default_fill_never_masks_zero_and_explicit_fill_overrides_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for dtype, default in (
+                ("float32", np.float32(9.969209968386869e36)),
+                ("float64", 9.969209968386869e36),
+                ("int16", -32767),
+            ):
+                path = Path(directory) / (dtype + ".nc")
+                with Dataset(path, "x") as ds:
+                    v = ds.create_variable(
+                        "value", ("x",), (3,), dtype=dtype, compression=1
+                    )
+                    v.write_raw(np.array([0.0, 1.0]), slice(0, 2))
+                with Dataset(path) as ds:
+                    np.testing.assert_allclose(
+                        ds["value"][...], [0.0, 1.0, np.nan], equal_nan=True
+                    )
+                explicit = Path(directory) / (dtype + "-explicit.nc")
+                with Dataset(explicit, "x") as ds:
+                    v = ds.create_variable(
+                        "value",
+                        ("x",),
+                        (3,),
+                        dtype=dtype,
+                        compression=1,
+                        attrs={"_FillValue": 0.0},
+                    )
+                    v.write_raw(np.array([0.0, 1.0, default]))
+                with Dataset(explicit) as ds:
+                    np.testing.assert_allclose(
+                        ds["value"][...], [np.nan, 1.0, float(default)], equal_nan=True
+                    )
+
     def test_packed_valid_range_and_unsupported_unsigned(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "range.nc"
