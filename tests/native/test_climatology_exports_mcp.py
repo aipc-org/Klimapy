@@ -160,11 +160,12 @@ class MCPTests(unittest.TestCase):
                 )
 
             self.assertIn("error", request("tools/list"))
+            initialized = request("initialize", {"protocolVersion": "2025-11-25"})[
+                "result"
+            ]
+            self.assertEqual(initialized["protocolVersion"], "2025-11-25")
             self.assertEqual(
-                request("initialize", {"protocolVersion": "2025-11-25"})["result"][
-                    "protocolVersion"
-                ],
-                "2025-11-25",
+                initialized["serverInfo"], {"name": "klimapy", "version": "1.2.1"}
             )
             self.assertEqual(len(request("tools/list")["result"]["tools"]), 4)
             response = request(

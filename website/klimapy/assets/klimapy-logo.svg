@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 120" role="img" aria-labelledby="title description">
+  <title id="title">Klimapy</title>
+  <desc id="description">A climate contour mark with a geometric K and the Klimapy wordmark.</desc>
+  <g fill="none" stroke="#1d1d1b" stroke-linecap="round">
+    <path d="M62 8a52 52 0 1 0 49 34" stroke-width="2.8"/>
+    <path d="M62 19a41 41 0 1 0 38 27" stroke-width="2.5"/>
+    <path d="M62 30a30 30 0 1 0 27 21" stroke-width="2.2"/>
+  </g>
+  <path d="M55 38v46M55 62l27-23M55 62l27 23" fill="none" stroke="#d97757" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5"/>
+  <text x="146" y="72" fill="#1d1d1b" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="46" font-weight="700" letter-spacing="-1.5">Klimapy</text>
+  <text x="149" y="99" fill="#65635e" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="10.5" font-weight="600" letter-spacing="2.1">CLIMATE DATA · PYTHON</text>
+</svg>

@@ -1,3 +1,5 @@
+![Klimapy — 面向气候数据的 Python 工具包](https://michalrees.bid/klimapy/assets/klimapy-logo.png)
+
 # Klimapy
 
 Klimapy 为气候分析提供统一入口：用 Python 组织研究流程，由 Rust 引擎完成核心计算。
