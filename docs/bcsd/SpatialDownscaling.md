@@ -62,18 +62,17 @@ output_dir/model_name/model_name_future_BCSD.nc
 
 1. 计算观测参考期逐日气候态，并保留 FFT 的前三个谐波进行平滑。
 2. 将观测气候态粗化到模式网格，与校正降水计算相对变化比值。
-3. 将比值限制在`[0.1, 10.0]`，双线性插值到观测网格。
+3. 正降水的比值限制在`[0.1, 10.0]`；零或负降水的比值设为零，缺测保留 NaN，再双线性插值到观测网格。
 4. 乘以高分辨率观测气候态，约束降水非负并保存文件。
 
-实现位于 `src/klimapy/BCSD/SpatialDownscaling.py`。`area_weighted_regrid` 支持可选 Rust 后端，
-未编译时自动回退 Python；详见 [Rust 后端说明](../development/RustBackend.md)。
+实现位于 `src/klimapy/BCSD/SpatialDownscaling.py`。`area_weighted_regrid` 和主流程的空间计算统一使用 Rust 引擎；详见 [Rust 后端说明](../development/RustBackend.md)。
 
 ## 分块输出与失败报告
 
 可选参数为 `strict=False`、`time_chunk_size=32`、`spatial_chunk_size=16`。
 逐日气候态、FFT 平滑和空间网格映射均缓存，模式粗网格气候态只计算一遍。
 原始资料分块读取，临时大数组使用自动清理的磁盘映射。
-安装 `[io]` 时逐块压缩写 NetCDF4；否则通过 SciPy 和磁盘映射写 NetCDF3。
+输出统一通过 Rust 数据层和原生 libnetcdf 分块压缩写 NetCDF4，不使用 netCDF4-Python/SciPy 输出回退。
 写出先进入临时文件，成功关闭后再替换目标路径，避免留下不完整目标文件。
 
 失败块保留 NaN，

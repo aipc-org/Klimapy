@@ -45,7 +45,7 @@ pip install klimapy
 
 ## 3. 输入数据要求
 
-输入必须是 xarray.DataArray，并满足：
+输入必须是 klimapy.native.Field，并满足：
 
 1. 必须包含 time 维度。
 2. 变量名需匹配对应指标：
@@ -56,7 +56,7 @@ pip install klimapy
 
 说明：
 
-保留 cftime 原生日历；缺失的日历日期补为 NaN，重复、倒序和非日尺度日期报错。
+通过 TimeAxis 保留 CF 原生日历；缺失的日历日期补为 NaN，重复、倒序和非日尺度日期报错。
 年度/月度结果默认要求 90% 的有效日，可通过 `min_valid_fraction` 调整。
 降水归一到 mm/day，温度归一到 degC；未知单位报错，无单位沿用旧输入约定。
 
@@ -70,14 +70,14 @@ result = klipy.ETCCDI.compute_indices(
 ```
 
 同一批次共用校验、年份切片和百分位阈值缓存。空间分块可控制原始日数据的工作集。
-支持 DataArray、Dataset 或 `pr/tx/tn/tg -> DataArray` 映射；DTR 需要 tx/tn 两个输入。
+支持 Field、Dataset 或 `pr/tx/tn/tg -> Field` 映射；DTR 需要 tx/tn 两个输入。
 
 ## 5. 基准期参数说明（百分位类函数）
 
 百分位相关函数共同参数（降水与温度均适用）：
 
-1. pr 或 temp：xarray.DataArray，目标时段逐日数据。
-2. baseline_pr：xarray.DataArray 或 None，基准期降水数据（仅降水百分位函数使用）。
+1. pr 或 temp：klimapy.native.Field，目标时段逐日数据。
+2. baseline_pr：klimapy.native.Field 或 None，基准期降水数据（仅降水百分位函数使用）。
 3. baseline_years：tuple/list，基准期起止年份，格式为 (start_year, end_year)。
 
 关键规则：
@@ -192,7 +192,7 @@ result = klipy.ETCCDI.compute_indices(
 ## 7. 快速开始
 
 ```python
-import xarray as xr
+from klimapy.native import read_field
 from klimapy.ETCCDI import (
     PRCPTOT, RX5DAY, CDD,
     R20mm_days, R20mm_ratio,
@@ -201,7 +201,7 @@ from klimapy.ETCCDI import (
 )
 
 # 读取日降水
-pr = xr.open_dataset("pr_daily.nc")["pr"]
+pr = read_field("pr_daily.nc", "pr")
 
 # 基础指数
 prcptot = PRCPTOT(pr)
@@ -218,10 +218,9 @@ r95d = R95mm_days(pr, baseline_years=(1981, 2010))
 r95_ratio = R95mm_ratio(pr, baseline_years=(1981, 2010))
 
 # 读取温度（变量名示例）
-ds_t = xr.open_dataset("tas_daily.nc")
-tx = ds_t["tx"]
-tn = ds_t["tn"]
-tg = ds_t["tg"]
+tx = read_field("tas_daily.nc", "tx")
+tn = read_field("tas_daily.nc", "tn")
+tg = read_field("tas_daily.nc", "tg")
 
 # 温度阈值类
 fd = FD(tn)
@@ -247,7 +246,7 @@ dtr.to_netcdf("DTR_monthly.nc")
 
 ## 8. 输出说明
 
-大部分函数返回 xarray.DataArray，通常包含：
+大部分函数返回 klimapy.native.Field，通常包含：
 
 1. year 维度
 2. 空间维（如 lat、lon）
@@ -267,7 +266,7 @@ dtr.to_netcdf("DTR_monthly.nc")
 
 ### 9.1 报错：输入数据必须包含 time 维度
 
-请确认输入为 DataArray 且包含 time。
+请确认输入为 Field 且包含 time。
 
 ### 9.2 报错：无效的降水变量名
 
@@ -353,3 +352,12 @@ result = compute_indices(
 方法依据：[ETCCDI 官方定义](https://etccdi.pacificclimate.org/list_27_indices.shtml)。
 bootstrap 替换步骤可与 [xclim 实现说明](https://xclim.readthedocs.io/en/stable/_modules/xclim/core/bootstrapping.html)对照。
 尚未完成与外部库所有指标、所有日历的数值交叉验证。
+
+## 原生迁移说明
+
+所有数值内核由 Rust 执行，输入/输出统一为 Field；`compute_indices` 返回字段字典。
+年度维度名为 year；月度维度名为 time，其坐标为月初 YYYYMMDD 整数。
+读取年度坐标使用 `result.coords['year']`，读取数值使用 `result.values`。
+`Field.time`/`TimeAxis` 可解码 CF 或 YYYYMMDD 时间，不依赖旧时间框架。
+温度月极值、月 DTR、百分位 type-8、闰日排除及年替代 bootstrap 沿用原有定义。
+与库同名指标比对时须统一时间频率、阈值关系和 bootstrap 策略。

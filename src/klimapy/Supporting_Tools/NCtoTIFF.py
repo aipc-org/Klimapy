@@ -1,168 +1,133 @@
-import xarray as xr
+"""Stream native NetCDF regions to Rust-written WGS84 Float32 GeoTIFF files."""
+
+import ctypes as ct
 import os
-import pandas as pd
-import logging
-
-logger = logging.getLogger(__name__)
-
-
-def _detect_lon_lat_names(data_array):
-    """识别经纬度坐标名，兼容 lon/lat 与 longitude/latitude 等命名。"""
-    lon_candidates = ["lon", "longitude", "x", "Lon"]
-    lat_candidates = ["lat", "latitude", "y", "Lat"]
-
-    lon_name = next(
-        (name for name in lon_candidates if name in data_array.coords), None
-    )
-    lat_name = next(
-        (name for name in lat_candidates if name in data_array.coords), None
-    )
-
-    if lon_name is None:
-        lon_name = next(
-            (name for name in lon_candidates if name in data_array.dims), None
-        )
-    if lat_name is None:
-        lat_name = next(
-            (name for name in lat_candidates if name in data_array.dims), None
-        )
-
-    if lon_name is None or lat_name is None:
-        raise ValueError(
-            "无法识别经纬度坐标，请确保数据包含 lon/lat 或 longitude/latitude 坐标。"
-        )
-
-    return lon_name, lat_name
-
-
-def _prepare_spatial_dataarray(data_array):
-    """统一经纬度坐标命名和方向，避免导出 GeoTIFF 时发生左右/上下翻转。"""
-    lon_name, lat_name = _detect_lon_lat_names(data_array)
-
-    rename_map = {}
-    if lon_name != "lon":
-        rename_map[lon_name] = "lon"
-    if lat_name != "lat":
-        rename_map[lat_name] = "lat"
-    if rename_map:
-        data_array = data_array.rename(rename_map)
-
-    if "lon" not in data_array.dims or "lat" not in data_array.dims:
-        raise ValueError("目标变量必须包含 lon 和 lat 维度。")
-
-    # GeoTIFF 常用方向：lon 从小到大，lat 从大到小（北到南）
-    if data_array.lon.values[0] > data_array.lon.values[-1]:
-        data_array = data_array.sortby("lon", ascending=True)
-    if data_array.lat.values[0] < data_array.lat.values[-1]:
-        data_array = data_array.sortby("lat", ascending=False)
-
-    data_array = data_array.rio.set_spatial_dims(
-        x_dim="lon", y_dim="lat", inplace=False
-    )
-    data_array = data_array.rio.write_crs("EPSG:4326", inplace=False)
-    return data_array
+from pathlib import Path
+import tempfile
+import numpy as np
+from ..native import Dataset, TimeAxis
+from .._backends.rust import _library, _ptr, _DOUBLE, _SIZE, _check
 
 
 def nc_to_tiff(
     nc_file, output_dir, clip_extent=None, variable=None, start_year=None, end_year=None
 ):
-    """
-    将 NetCDF 数据按时间维度裁剪并逐时次导出为 GeoTIFF。
-
-    参数:
-        nc_file (str): 输入 NetCDF 文件路径。
-        output_dir (str): 输出 GeoTIFF 文件夹路径；若不存在会自动创建。
-        clip_extent (tuple[float, float, float, float] | None): 裁剪经纬度范围，格式为
-            (min_lon, max_lon, min_lat, max_lat)，单位为度，坐标系默认为 EPSG:4326。
-            为 None 时不做空间裁剪，直接导出全区域。
-        variable (str | None): 要导出的变量名（如 pr、tas、tmax 等）。
-            为 None 时：若 NetCDF 仅有 1 个变量则自动使用；若有多个变量则抛出异常并提示指定。
-        start_year (int | None): 起始年份（包含该年）。
-            仅在数据包含 time 维度时生效；为 None 时不限制起始年份。
-        end_year (int | None): 结束年份（包含该年）。
-            仅在数据包含 time 维度时生效；为 None 时不限制结束年份。
-    """
-    try:
-        import rioxarray  # noqa: F401 — register the rio accessor
-        from shapely.geometry import box
-    except ImportError as exc:
-        raise ImportError('GeoTIFF export requires pip install "klimapy[gis]"') from exc
-    os.makedirs(output_dir, exist_ok=True)
-
-    # 打开数据集并选择目标变量
-    with xr.open_dataset(nc_file) as ds:
+    if start_year is not None and end_year is not None and start_year > end_year:
+        raise ValueError("start_year must not exceed end_year")
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    aliases = {
+        "longitude": "lon",
+        "Lon": "lon",
+        "latitude": "lat",
+        "Lat": "lat",
+        "Time": "time",
+        "x": "lon",
+        "y": "lat",
+    }
+    paths = []
+    with Dataset(nc_file) as ds:
+        names = ds.names()
         if variable is None:
-            if len(ds.data_vars) == 1:
-                variable = list(ds.data_vars)[0]
-            else:
-                available_vars = ", ".join(ds.data_vars)
+            choices = [n for n in names if len(ds[n].dims) >= 2]
+            if len(choices) != 1:
+                raise ValueError("Specify variable; candidates: " + str(choices))
+            variable = choices[0]
+        v = ds[variable]
+        dims = tuple(aliases.get(d, d) for d in v.dims)
+        if set(dims) not in ({"lat", "lon"}, {"time", "lat", "lon"}) or len(
+            set(dims)
+        ) != len(dims):
+            raise ValueError(
+                "Raster export requires lat/lon and optional time dimensions"
+            )
+        original = dict(zip(dims, v.dims))
+        y, x = ds[original["lat"]][...], ds[original["lon"]][...]
+        for axis in (y, x):
+            if (
+                len(axis) < 2
+                or not np.isfinite(axis).all()
+                or not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))
+            ):
                 raise ValueError(
-                    f"检测到多个变量，请显式指定 variable 参数。可选变量: {available_vars}"
+                    "Raster coordinates must be finite and strictly monotonic with at least two centers"
                 )
-
-        if variable not in ds.data_vars:
-            available_vars = ", ".join(ds.data_vars)
-            raise ValueError(f"变量 '{variable}' 不存在。可选变量: {available_vars}")
-
-        da = _prepare_spatial_dataarray(ds[variable])
-
-        if (
-            start_year is not None
-            and end_year is not None
-            and int(start_year) > int(end_year)
-        ):
-            raise ValueError(f"start_year 不能大于 end_year: {start_year} > {end_year}")
-
-        if "time" in da.dims and (start_year is not None or end_year is not None):
-            start_date = f"{int(start_year)}-01-01" if start_year is not None else None
-            end_date = f"{int(end_year)}-12-31" if end_year is not None else None
-
-            if start_date is not None and end_date is not None:
-                da = da.sel(time=slice(start_date, end_date))
-            elif start_date is not None:
-                da = da.sel(time=slice(start_date, None))
-            else:
-                da = da.sel(time=slice(None, end_date))
-
-            if da.sizes.get("time", 0) == 0:
-                raise ValueError(
-                    f"时间筛选后无数据，请检查年份范围。start_year={start_year}, end_year={end_year}"
-                )
-
-        # 可选空间裁剪
+            if not np.allclose(np.diff(axis), np.diff(axis)[0], rtol=1e-7, atol=1e-10):
+                raise ValueError("GeoTIFF requires a regular grid")
+        if np.any(np.abs(y) > 90) or np.ptp(x) > 360:
+            raise ValueError("Expected WGS84 longitude/latitude")
+        yi, xi = np.arange(len(y)), np.arange(len(x))
         if clip_extent is not None:
-            min_lon, max_lon, min_lat, max_lat = clip_extent
-
-            bbox = box(min_lon, min_lat, max_lon, max_lat)
-            da_clipped = da.rio.clip([bbox.__geo_interface__], "EPSG:4326", drop=True)
-            da_clipped = _prepare_spatial_dataarray(da_clipped)
+            west, east, south, north = map(float, clip_extent)
+            if (
+                not np.isfinite([west, east, south, north]).all()
+                or west >= east
+                or south >= north
+            ):
+                raise ValueError("clip_extent must be west<east and south<north")
+            yi, xi = yi[(y >= south) & (y <= north)], xi[(x >= west) & (x <= east)]
+            if not len(yi) or not len(xi):
+                raise ValueError("Spatial clip contains no cell centers")
+        yy, xx = y[yi], x[xi]
+        dy, dx = abs(float(y[1] - y[0])), abs(float(x[1] - x[0]))
+        time = ds[original["time"]] if "time" in dims else None
+        if time is not None:
+            dates, _ = TimeAxis(time[...], time.attrs).dates()
+            chosen = np.flatnonzero(
+                (dates[:, 0] >= (start_year if start_year is not None else 1))
+                & (dates[:, 0] <= (end_year if end_year is not None else 9999))
+            )
+            if not len(chosen):
+                raise ValueError("Year selection contains no dates")
         else:
-            da_clipped = da
-
-        # 按时间维度循环，每个时间步保存为一个 tiff；无时间维时输出单个 tiff
-        if "time" in da_clipped.dims:
-            total_steps = len(da_clipped.time.values)
-            progress_step = max(1, total_steps // 10)
-
-            for i, time in enumerate(da_clipped.time.values):
-                da_time = da_clipped.sel(time=time)
-                time_str = (
-                    time.strftime("%Y%m%d")
-                    if hasattr(time, "strftime")
-                    else pd.to_datetime(time).strftime("%Y%m%d")
+            if start_year is not None or end_year is not None:
+                raise ValueError("Year selection requires a time coordinate")
+            chosen = [None]
+        fn = _library().kl_write_tiff
+        fn.argtypes, fn.restype = (
+            [ct.c_char_p, _DOUBLE, _SIZE, _SIZE, _DOUBLE],
+            ct.c_int,
+        )
+        for t in chosen:
+            key = tuple(
+                int(t)
+                if d == "time"
+                else slice(int(yi[0]), int(yi[-1]) + 1)
+                if d == "lat"
+                else slice(int(xi[0]), int(xi[-1]) + 1)
+                for d in dims
+            )
+            values = v[key]
+            remaining = [d for d in dims if d != "time"]
+            values = values.transpose([remaining.index("lat"), remaining.index("lon")])
+            if yy[0] < yy[-1]:
+                values = values[::-1]
+            if xx[0] > xx[-1]:
+                values = values[:, ::-1]
+            values = np.ascontiguousarray(values, dtype="float64")
+            extent = np.ascontiguousarray(
+                [float(xx.min()) - dx / 2, float(yy.max()) + dy / 2, dx, dy]
+            )
+            suffix = (
+                ""
+                if t is None
+                else "_"
+                + "".join(
+                    f"{int(n):0{4 if i == 0 else 2}d}" for i, n in enumerate(dates[t])
                 )
-                output_file = os.path.join(output_dir, f"{variable}_{time_str}.tiff")
-                da_time.rio.to_raster(output_file)
-
-                if (i + 1) % progress_step == 0 or (i + 1) == total_steps:
-                    logger.info(
-                        f"已完成 {i + 1}/{total_steps} ({(i + 1) / total_steps * 100:.1f}%)"
+            )
+            path = root / f"{variable}{suffix}.tiff"
+            with tempfile.TemporaryDirectory(prefix=".geotiff-", dir=root) as tmp:
+                stage = Path(tmp) / "output.tiff"
+                _check(
+                    fn(
+                        os.fsencode(stage),
+                        _ptr(values),
+                        values.shape[0],
+                        values.shape[1],
+                        _ptr(extent),
                     )
-
-            logger.info(f"转换完成！共生成 {total_steps} 个 tiff 文件")
-        else:
-            output_file = os.path.join(output_dir, f"{variable}.tiff")
-            da_clipped.rio.to_raster(output_file)
-            logger.info("转换完成！共生成 1 个 tiff 文件")
-
-        logger.info(f"输出目录: {output_dir}")
+                )
+                os.replace(stage, path)
+            paths.append(str(path))
+    return paths

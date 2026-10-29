@@ -71,7 +71,7 @@ klimapy/
         SpatialDownscaling.py  # SD、FFT 平滑、粗网格加权
         BiasCorrectionSpatialDownscaling.py  # 一体化串联
     _core/                # 共用校验、日历、空间权重和输出设施
-    _backends/rust.py     # 可选 Rust 后端
+    _backends/rust.py     # 必需 Rust 计算引擎
     workflows/batch.py    # 多模型批量流程
 ```
 

@@ -1,59 +1,47 @@
-# 验证、依赖兼容与原生发布
+# 验证、参考库比对与原生发布
 
-## 核心安装与可选依赖
-
-核心依赖下限：NumPy 1.23、pandas 1.5、xarray 2023.1、SciPy 1.9、cftime 1.6、tqdm 4.60。
-GIS 库放在 `[gis]`，NetCDF4 放在 `[io]`，Dask 放在 `[parallel]`。
-核心导入不会自动加载 rioxarray/geopandas，SciPy 后端可读写 NetCDF3。
-读取 NetCDF4/HDF5 文件和增量压缩输出可安装 `klimapy[io]`。
-
-`python-check.yml` 配置 Python 3.8 最低依赖组合，以及 3.10/3.12/3.13 的兼容检查。
-本机已实际验证 Python 3.8.20 与上述最低依赖组合，以及 Python 3.12 的当前依赖组合。
-Python 3.12 构建的 Rust wheel 也已在 Python 3.8 安装并通过全部计算测试。
-其余 Python 版本及 Windows/macOS 结果以远程 CI 为准。
-
-## 测试
+## 三种检查分别报告
 
 ```bash
-python tools/manage.py check --rust --require-rust
+conda run -n Test python tools/manage.py test
+conda run -n Test python tools/manage.py test --installed
+python tools/manage.py compare
+python tools/manage.py compare --installed
 ```
 
-测试覆盖单位、缺失和不连续日期、原生日历、有效日比例、实际参考日期匹配、
-基准期生效、共享阈值缓存、分块计算一致性、磁盘映射、流式输出、SciPy 输出回退、
-批量失败报告，以及 Python/Rust 结果兼容。
-`test_docs_links.py` 检查迁移后的本地 Markdown 链接。
+`test` 只运行 `tests/native`：启动前验证 conda Test、允许的最小依赖和 Rust ABI，
+运行期间拦截旧库导入，零测试或跳过不能作为通过。包括所有生产 Python 模块的
+导入检查和静态导入审计。`--installed` 拒绝源码/可编辑包注入，检查真正 site-packages。
 
-## Linux 原生 wheel
+`compare` 在不同进程中运行 Test 生产实现和 Test1 独立参考。当前使用 CN05.1：
+2019—2020 Pre、2020—2021 Tmin/Tmax/Tm 的 6×8 陆地区域。覆盖文件值、变率、
+SVD/EOF、全部降水指标、温度计数/极值/GSL/百分位/bootstrap/持续事件、
+六种重映射、空间均值/多边形、样条和平滑、完整 BC→SD、GeoTIFF 独立读取。
+生成的粗网格模式是观测资料的明确 0.8 倍人工扰动，验证数值链路，不能作为真实
+模式预测能力的证据。合成边界/缺测/日历案例仍由单元测试补足。
 
-`rust-check.yml` 增加 manylinux 容器中的构建、auditwheel 检查/修复和安装计算测试：
+Test1 中使用 SciPy、NumPy、xarray、xclim、eofs 等参考库，绝不从生产结果反推期望值。
+比较记录容差、绝对误差、输入 SHA256、参考库版本、单位约定、Git 状态与加载位置。
+每次运行在 `outputs/cn05-comparison/run-*` 下创建独立目录；源数据和结果不进 Git。
+数据的 units 缺失时，当前用显式 mm/day、degC 约定；2019 Pre 的日期由用户确认修正。
+这不是对全部 39 GB 数据的全网格验证。缺少数据或 Test1 会报错，不静默跳过。
+
+`check` 依次运行静态检查、Test 单元验收和本地真实比对；加 `--rust` 检查 Rust。
+公开 CI 只执行不含私有数据的原生单元范围，不宣称 CN05.1 本地比对已经远程通过。
+历史 tests 根目录中的旧框架接口用例是旧数据模型的迁移记录，不计入当前通过数；
+不能将当前通过数写成整库旧用例全部通过。
+
+## 构建与分发
+
+基础 Python 依赖仅 NumPy。历史 extra 已移除，参考库环境见
+[Test1](comparison-environment.md)。原生文件读写需要 libnetcdf/HDF5；可选矢量文件
+需要原生 GDAL。它们不随 wheel 打包。源码构建需要 Cargo，失败不回退。
 
 ```bash
-docker run --rm -v "$PWD:/io" quay.io/pypa/manylinux_2_28_x86_64 \
-    bash /io/tools/build_manylinux.sh
+python tools/manage.py build --rust on
 ```
 
-使用 [PyPA manylinux 镜像](https://github.com/pypa/manylinux) 和
-[auditwheel](https://github.com/pypa/auditwheel) 校验 Linux 动态库依赖及平台标签。
-本机没有 Docker，因此此容器流程已配置但尚未本机执行；不能把本机普通 Linux wheel
-视为已通过 manylinux 发布验证。Windows/macOS 原生 wheel 同样由 CI 验证。
-
-现有发布工作流仍保留通用纯 Python wheel。原生 wheel 作为独立构建产物，
-确认跨平台 CI 通过后再纳入发布流程。
-
-## 性能复现
-
-```bash
-python tools/manage.py benchmark
-```
-
-原始数据写入 `benchmarks/results/latest.json`。当 Python 基线也被向量化或缓存后，
-此前的 Rust 加速倍数不能继续套用。BC/SD 的缓存、分块等收益应比较完整流水线，
-并同时检查数据规模、I/O 和峰值内存。当前没有真实科研数据的性能结论。
-
-## 发布门槛
-
-`publish.yml` 在同一工作流中调用可复用的 `python-check.yml` 和 `rust-check.yml`。
-发布作业同时依赖两组检查与构建作业；原生测试使用 `--require-rust`，避免仅跳过测试。
-构建作业还会对实际安装的通用 wheel 运行测试，并核对版本标签。
-普通提交/PR 不触发发布，标签只在全部门槛通过后进入 PyPI 发布作业。
-统一命令及目录约定见 [CONTRIBUTING](../../CONTRIBUTING.md)。
+本地已安装包检查与源码检查必须分别执行。wheel 应包含 Rust 动态库与 FITPACK
+许可；sdist 应包含 Rust 源码和 vendored 引擎，并且没有 data/outputs。
+平台矩阵和 manylinux 配置见 `.github/workflows/`；远程配置不等于已完成远程验收。
+所有工具均不自动提交、推送、创建标签或发布。

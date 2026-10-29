@@ -1,0 +1,90 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：Rust 引擎。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/backend.html"><link rel="stylesheet" href="manual.css"><title>Rust 引擎 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a aria-current="page" href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考与开发 / Rust 引擎</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">Rust 引擎与原生数据层</h1>
+<p>生产包只使用 NumPy/标准库封装接口、坐标、日历和结果。数值计算由必需 Rust 引擎执行，
+没有可切换的 Python 后备算法。旧 Python 框架仅存在于独立 Test1 参考进程。</p>
+<h2 id="section-2">计算职责</h2>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>Rust 职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BC</td>
+<td>清洗拟合样本、线性分位数、纯 Rust FITPACK 三次平滑样条及夹持求值</td>
+</tr>
+<tr>
+<td>SD</td>
+<td>气候态累计与均值、低频谐波平滑、空间计划、降水比值与块级重建</td>
+</tr>
+<tr>
+<td>ETCCDI</td>
+<td>聚合/计数、滚动最大、连续事件、type-8 百分位、温度比例/持续事件及 GSL</td>
+</tr>
+<tr>
+<td>插值</td>
+<td>双线性、球面最近邻、局部二次拟合、一阶/二阶球面矩形守恒权重与求值</td>
+</tr>
+<tr>
+<td>变率</td>
+<td>季节异常、去趋势、年度标准差和覆盖率、年度相对趋势</td>
+</tr>
+<tr>
+<td>SVD/EOF</td>
+<td>分解、权重处理、EOF 与重建</td>
+</tr>
+<tr>
+<td>空间工具</td>
+<td>空间均值、Polygon/MultiPolygon 与孔洞掩膜、Float32 GeoTIFF 写出</td>
+</tr>
+<tr>
+<td>文件</td>
+<td>Rust 调用系统 libnetcdf 分块读写、压缩、缺测/打包解码</td>
+</tr>
+</tbody>
+</table>
+<p>Python 准备分组标签、参考期索引、bootstrap 年份组合并组织结果；重复样本百分位、
+各副本指标及最终均值仍调用 Rust。GeoJSON 使用标准库读取；Shapefile 及 CRS 转换
+使用可选的原生 GDAL C API，随后将 WGS84 几何交给 Rust 掩膜，不导入 Python GIS 库。</p>
+<h2 id="section-3">构建与 ABI</h2>
+<pre><code class="language-bash">conda run -n Test python -m pip install --no-deps --no-build-isolation .
+conda run -n Test python setup.py build_ext --inplace
+conda run -n Test python tools/manage.py test
+</code></pre>
+<p>ABI 为 <strong>4</strong>，旧动态库必须重建。Cargo 缺失或编译失败会报错；<code>KLIMAPY_BUILD_RUST=0</code>
+和 <code>KLIMAPY_BACKEND=python</code> 均不支持。旧 <code>auto</code> 值等价于 rust，不回退。
+<code>klimapy.backend_info()</code> 可检查原生库状态。</p>
+<p>FITPACK 来源为 splinefit 0.4.1 的独立纯 Rust 引擎，源码、校验值、控制流补丁说明及 MIT/Apache 许可
+保留在 <code>rust/vendor/splinefit</code>，相应许可也随 wheel 安装。构建不联网下载依赖，
+无需 Fortran。BC 的初始 knot workspace 和扩容后重拟合对应 Test1 的 SciPy 1.18.1 UnivariateSpline 行为，
+不以另一种平滑算法替代旧三次样条。</p>
+<h2 id="section-4">原生对象与内存</h2>
+<p><code>klimapy.native.Field</code> 包含 <code>values/dims/coords/attrs/coordinate_attrs</code>；高层入口统一
+使用它，批量指标返回字段字典。<code>Dataset/Variable</code> 提供显式可关闭的文件句柄，
+<code>read_field(indexers=...)</code> 只读取指定区域，关闭文件后返回 eager Field。
+<code>Field</code> 不是旧框架克隆，不提供任意 groupby、resample 或 GIS accessor。</p>
+<p>BC/SD 的文件入口使用 <code>PrecipSource</code>，保持有界读取，模型行和观测时间块按需载入；
+BC 输出可为 memmap，SD 中间气候态使用临时磁盘缓冲。独立调用者负责关闭 BC 结果。
+空间计划/传递函数都支持 close/上下文管理；关闭后求值明确报错。</p>
+<h2 id="section-5">文件运行库及边界</h2>
+<p>系统需提供 libnetcdf（读 NetCDF4 时还需其 HDF5 依赖）；自动发现失败时设置
+<code>KLIMAPY_NETCDF_LIBRARY</code>。Shapefile 可选设置 <code>KLIMAPY_GDAL_LIBRARY</code>。
+这些是原生共享库路径，不是 Python 包。运行库目前不随 wheel 打包。
+Rust 对自己的 NetCDF 调用串行加锁，不承诺和其他进程内绑定并发安全。</p>
+<p>NetCDF 支持数值变量、单位步长切片/取点、显式分组路径读取、数值/字符串属性、
+缺测与打包解码、根组固定维度变量创建、压缩。默认读取 float64；超过 2^53 的
+int64/uint64 不适合无损 ID 读取。尚不支持 _Unsigned=true、字符串/复合变量、
+无限维追加、创建分组、跨步/花式文件索引。<code>write_raw</code> 写存储值，不隐式反向打包。
+不自写 HDF5 解析器，也不将 Dataset 宣称为完整 CF 数据框架。</p>
+<p>日历元数据支持 Gregorian/standard（1582 年改革断档）、proleptic Gregorian、Julian、
+noleap/all_leap/360_day，年份范围 1..9999；每日时间必须有序且无重复。
+数值时间使用 CF since 单位或 YYYYMMDD。高层需要时将缺日补为 NaN，绝不按文件名
+猜测年份。CN05.1 的 2019 Pre 时间修正是用户确认的特例，记录留在本地 data 内。</p>
+<p>GeoTIFF 为 WGS84 规则矩形网格、Float32、PixelIsArea、单 strip、无压缩，
+classic TIFF 单文件须小于 4 GB；不规则网格明确拒绝。矢量掩膜支持 Polygon/
+MultiPolygon、孔洞和边界相交语义，不处理跨日期变更线的包裹几何。</p>
+<h2 id="section-6">验证</h2>
+<p><a href="validation.html">验证说明</a> 区分 Test 单元测试、真正安装包与 Test1 的 CN05.1 比对。
+真实数据不进 Git，也不随 wheel/sdist 发布。远程平台配置不等于已在这些平台验证。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="migration.html"><small>上一章</small>迁移与计算口径 ←</a><a href="validation.html"><small>下一章</small>验证与比对 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">计算职责</a><a class="level-2" href="#section-3">构建与 ABI</a><a class="level-2" href="#section-4">原生对象与内存</a><a class="level-2" href="#section-5">文件运行库及边界</a><a class="level-2" href="#section-6">验证</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

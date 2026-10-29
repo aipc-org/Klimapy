@@ -1,99 +1,76 @@
-# 可选 Rust 加速后端
+# Rust 引擎与原生数据层
 
-Rust 内核通过 ctypes 的 C ABI 接口调用，不依赖第三方 Rust crate。
-NumPy、SciPy、xarray 仍然是运行依赖。
+生产包只使用 NumPy/标准库封装接口、坐标、日历和结果。数值计算由必需 Rust 引擎执行，
+没有可切换的 Python 后备算法。旧 Python 框架仅存在于独立 Test1 参考进程。
 
-## 覆盖范围
+## 计算职责
 
-| 模块 | 已接入 Rust 的计算 |
+| 模块 | Rust 职责 |
 | --- | --- |
-| 降水变率 | 逐格点去趋势、年度变率相对趋势；完整和分段流程自动使用 |
-| ETCCDI | CDD/CWD 最长连续日数、WSDI/CSDI 持续事件累计日数 |
-| BCSD | area_weighted_regrid 的源网格中心筛选和余弦加权归并 |
+| BC | 清洗拟合样本、线性分位数、纯 Rust FITPACK 三次平滑样条及夹持求值 |
+| SD | 气候态累计与均值、低频谐波平滑、空间计划、降水比值与块级重建 |
+| ETCCDI | 聚合/计数、滚动最大、连续事件、type-8 百分位、温度比例/持续事件及 GSL |
+| 插值 | 双线性、球面最近邻、局部二次拟合、一阶/二阶球面矩形守恒权重与求值 |
+| 变率 | 季节异常、去趋势、年度标准差和覆盖率、年度相对趋势 |
+| SVD/EOF | 分解、权重处理、EOF 与重建 |
+| 空间工具 | 空间均值、Polygon/MultiPolygon 与孔洞掩膜、Float32 GeoTIFF 写出 |
+| 文件 | Rust 调用系统 libnetcdf 分块读写、压缩、缺测/打包解码 |
 
-ETCCDI 通过单次调用处理整批空间格点。
-变率低层数组要求 `(time, lat, lon)`，高层接口会自动归一输入维度。
+Python 准备分组标签、参考期索引、bootstrap 年份组合并组织结果；重复样本百分位、
+各副本指标及最终均值仍调用 Rust。GeoJSON 使用标准库读取；Shapefile 及 CRS 转换
+使用可选的原生 GDAL C API，随后将 WGS84 几何交给 Rust 掩膜，不导入 Python GIS 库。
 
-BCSD 按源网格中心筛选并使用余弦权重归并。
-相对趋势遵循 NaN 传播规则：某格点年度序列存在 NaN 时，趋势仍为 NaN。
-去趋势目前加速 float32/float64 三维数组，其余类型沿用原实现。
-
-Supporting_Tools 的空间平均、NCtoTIFF 的文件读写，以及 NumPy、SciPy 已编译的
-分位数、FFT、插值操作继续使用现有实现。已加入模拟 NetCDF 的 BC/SD 端到端验证；尚无真实科研数据性能结论。
-
-## 构建与选择
-
-在已安装 Rust/Cargo 和 Python 构建工具的环境中，从仓库根目录安装：
+## 构建与 ABI
 
 ```bash
-KLIMAPY_BUILD_RUST=1 pip install .
+conda run -n Test python -m pip install --no-deps --no-build-isolation .
+conda run -n Test python setup.py build_ext --inplace
+conda run -n Test python tools/manage.py test
 ```
 
-默认自动尝试编译；没有 Rust 或编译失败时安装 Python 后端。
-显式设置 `KLIMAPY_BUILD_RUST=1` 时，编译失败会终止安装。
-需要纯 Python wheel 时：
+ABI 为 **4**，旧动态库必须重建。Cargo 缺失或编译失败会报错；`KLIMAPY_BUILD_RUST=0`
+和 `KLIMAPY_BACKEND=python` 均不支持。旧 `auto` 值等价于 rust，不回退。
+`klimapy.backend_info()` 可检查原生库状态。
 
-```bash
-KLIMAPY_BUILD_RUST=0 python -m build
-```
+FITPACK 来源为 splinefit 0.4.1 的独立纯 Rust 引擎，源码、校验值、控制流补丁说明及 MIT/Apache 许可
+保留在 `rust/vendor/splinefit`，相应许可也随 wheel 安装。构建不联网下载依赖，
+无需 Fortran。BC 的初始 knot workspace 和扩容后重拟合对应 Test1 的 SciPy 1.18.1 UnivariateSpline 行为，
+不以另一种平滑算法替代旧三次样条。
 
-PowerShell 中使用 `$env:KLIMAPY_BUILD_RUST = "1"` 设置环境变量，再运行安装命令。
+## 原生对象与内存
 
-运行时默认 `KLIMAPY_BACKEND=auto`，可动态切换：
+`klimapy.native.Field` 包含 `values/dims/coords/attrs/coordinate_attrs`；高层入口统一
+使用它，批量指标返回字段字典。`Dataset/Variable` 提供显式可关闭的文件句柄，
+`read_field(indexers=...)` 只读取指定区域，关闭文件后返回 eager Field。
+`Field` 不是旧框架克隆，不提供任意 groupby、resample 或 GIS accessor。
 
-```python
-import os
-from klimapy import backend_info
+BC/SD 的文件入口使用 `PrecipSource`，保持有界读取，模型行和观测时间块按需载入；
+BC 输出可为 memmap，SD 中间气候态使用临时磁盘缓冲。独立调用者负责关闭 BC 结果。
+空间计划/传递函数都支持 close/上下文管理；关闭后求值明确报错。
 
-print(backend_info())
-os.environ['KLIMAPY_BACKEND'] = 'python'  # 强制使用原实现
-os.environ['KLIMAPY_BACKEND'] = 'rust'    # 要求原生库可用，否则在调用计算时报错
-os.environ['KLIMAPY_BACKEND'] = 'auto'    # 可用时自动加速
-```
+## 文件运行库及边界
 
-自动选择只针对已覆盖、支持的数据类型；未覆盖的计算继续由 Python 完成。
-这里的运行选项与构建选项互相独立，`KLIMAPY_BACKEND=rust` 不会触发编译。
+系统需提供 libnetcdf（读 NetCDF4 时还需其 HDF5 依赖）；自动发现失败时设置
+`KLIMAPY_NETCDF_LIBRARY`。Shapefile 可选设置 `KLIMAPY_GDAL_LIBRARY`。
+这些是原生共享库路径，不是 Python 包。运行库目前不随 wheel 打包。
+Rust 对自己的 NetCDF 调用串行加锁，不承诺和其他进程内绑定并发安全。
 
-开发环境可以原地构建：
+NetCDF 支持数值变量、单位步长切片/取点、显式分组路径读取、数值/字符串属性、
+缺测与打包解码、根组固定维度变量创建、压缩。默认读取 float64；超过 2^53 的
+int64/uint64 不适合无损 ID 读取。尚不支持 _Unsigned=true、字符串/复合变量、
+无限维追加、创建分组、跨步/花式文件索引。`write_raw` 写存储值，不隐式反向打包。
+不自写 HDF5 解析器，也不将 Dataset 宣称为完整 CF 数据框架。
 
-```bash
-KLIMAPY_BUILD_RUST=1 python setup.py build_ext --inplace
-python tools/manage.py test --require-rust
-python tools/manage.py benchmark
-```
+日历元数据支持 Gregorian/standard（1582 年改革断档）、proleptic Gregorian、Julian、
+noleap/all_leap/360_day，年份范围 1..9999；每日时间必须有序且无重复。
+数值时间使用 CF since 单位或 YYYYMMDD。高层需要时将缺日补为 NaN，绝不按文件名
+猜测年份。CN05.1 的 2019 Pre 时间修正是用户确认的特例，记录留在本地 data 内。
 
-后两条命令需要源码已安装，或设置 `PYTHONPATH=src`。
+GeoTIFF 为 WGS84 规则矩形网格、Float32、PixelIsArea、单 strip、无压缩，
+classic TIFF 单文件须小于 4 GB；不规则网格明确拒绝。矢量掩膜支持 Polygon/
+MultiPolygon、孔洞和边界相交语义，不处理跨日期变更线的包裹几何。
 
-## 历史基准：首次 Rust 接入（2026-10-19）
+## 验证
 
-Linux，Python 3.12，单线程 Rust release；模拟数据，随机种子 42。
-取三次运行中位数，包含 Python 调用、必要的数组转换和分配；比较结果通过
-`rtol=atol=1e-6` 校验。两种后端均关闭进度显示。
-
-| 计算 | 数据规模 | Python | Rust | 加速 |
-| --- | --- | --- | --- | --- |
-| 去趋势 | 3650 × 30 × 30 | 343.51 ms | 38.04 ms | 9.0 倍 |
-| 年变率相对趋势 | 100 × 30 × 30 | 245.30 ms | 0.10 ms | 2412 倍 |
-| 最长连续日内核 | 3650 × 30 × 30 | 201.64 ms | 3.58 ms | 56.3 倍 |
-| 持续事件日内核 | 3650 × 30 × 30 | 59.41 ms | 2.87 ms | 20.7 倍 |
-| BCSD 粗网格计算 | 300 × 300 → 60 × 60 | 54.52 ms | 1.15 ms | 47.3 倍 |
-| 完整降水变率流程 | 3650 × 30 × 30 | 382.81 ms | 96.44 ms | 4.0 倍 |
-| CDD 公共接口 | 3650 × 30 × 30 | 233.31 ms | 27.45 ms | 8.5 倍 |
-
-年度趋势原实现对每个格点单独调用 SciPy 回归，函数调用开销较大；
-该小内核的倍数不能代表整库收益。原始结果见 `benchmarks/results/latest.json`。
-真实数据规模、内存布局和文件 I/O 都会影响整体速度。
-
-该表是进一步向量化 Python 基线、缓存 BC/SD 之前的历史记录，不代表当前版本的加速倍数。当前运行报告写入 benchmarks/results/latest.json，历史迁移快照为 benchmarks/results/reference-2026-10-19.json。
-
-## 构建验证与发布边界
-
-本机验证了 Linux 原生 wheel、纯 Python wheel、包含 Rust 源码的 sdist，
-以及没有 Cargo 时的自动回退构建。原生 wheel 安装到独立目录后通过数值测试。
-测试覆盖部分/全部缺失、单有效样本、常量、线性趋势、非连续数组、空维度、
-逆序纬度、温度持续事件公共接口和完整/分段变率流程。
-
-`rust-check.yml` 增加 Linux、Windows、macOS 的构建及安装测试，并用 Python 3.11
-构建、Python 3.12 安装验证 C ABI；这组远程 CI 尚未在本机执行。
-目前发布工作流仍生成通用纯 Python wheel。原生 wheel 是独立 CI 构建产物；
-已配置 manylinux 容器构建/auditwheel 修复；该容器流程尚未在本机执行。详见 [验证与发布](validation.md)。
+[验证说明](validation.md) 区分 Test 单元测试、真正安装包与 Test1 的 CN05.1 比对。
+真实数据不进 Git，也不随 wheel/sdist 发布。远程平台配置不等于已在这些平台验证。

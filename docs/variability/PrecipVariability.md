@@ -82,7 +82,7 @@ $$
 \sigma_y(i,j)=\operatorname{std}_{t\in y}\big(\tilde{P}_t(i,j)\big)
 $$
 
-对应代码实现为 `np.nanstd(..., axis=0)`，即忽略 NaN。
+生产实现由 Rust Welford 内核计算总体标准差（ddof=0），忽略 NaN。
 
 ### 3.4 变率趋势（annual_precip_variability_trend / calc_variability_trend）
 对 $\sigma_y(i,j)$ 与年份 $y$ 做线性回归：
@@ -109,11 +109,11 @@ $$
 功能：计算全时段年降水变率序列（返回 `year, lat, lon`）。
 
 参数：
-- `ds`：`xarray.Dataset`，输入数据集，需包含降水变量与 `time/lat/lon` 维度。
+- `ds`：`字段字典（变量名 → Field）`，输入数据集，需包含降水变量与 `time/lat/lon` 维度。
 - `baseline_years`：`(start, end)` 或 None。显式年份用于季节气候态，None 使用全时段；去趋势仍使用完整目标时段。
 
 返回：
-- `xr.DataArray`，维度为 `('year', 'lat', 'lon')`，值为每年标准差 $\sigma_y(i,j)$。
+- `Field`，维度为 `('year', 'lat', 'lon')`，值为每年标准差 $\sigma_y(i,j)$。
 
 ### 4.2 annual_precip_variability_trend(annual_var, years, baseline_years=None)
 功能：对年变率序列做线性趋势分析，输出 `%/10年`。

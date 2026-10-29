@@ -1,4 +1,4 @@
-"""Numerical compatibility checks between production Python and Rust paths."""
+"""Compare the Rust engine with frozen, test-only Python numerical oracles."""
 
 import contextlib
 import os
@@ -9,6 +9,7 @@ import numpy as np
 import xarray as xr
 
 from klimapy import _accelerate
+from reference import kernels as reference
 from klimapy.ETCCDI import ETCCDI as et
 from klimapy import SD as sd
 from klimapy.PrecipitationVariability import precip_variability_netcdf as pv
@@ -16,20 +17,48 @@ from klimapy.PrecipitationVariability import precip_variability_netcdf as pv
 
 @contextlib.contextmanager
 def backend(name):
-    with patch.dict(os.environ, {"KLIMAPY_BACKEND": name}):
-        yield
+    if name == "python":
+        # Python oracles are test-only, never a selectable production backend.
+        from contextlib import ExitStack
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch.object(_accelerate, "detrend", reference.remove_linear_trend)
+            )
+            stack.enter_context(
+                patch.object(
+                    _accelerate,
+                    "runs",
+                    lambda data, min_run=1, mode=0: (
+                        reference._max_consecutive_true(data)
+                        if mode == 0
+                        else reference._count_days_in_runs(data, min_run)
+                    ),
+                )
+            )
+            stack.enter_context(
+                patch.object(
+                    _accelerate,
+                    "relative_trend",
+                    reference.annual_precip_variability_trend,
+                )
+            )
+            yield
+    else:
+        with patch.dict(os.environ, {"KLIMAPY_BACKEND": name}):
+            yield
 
 
 class BackendTests(unittest.TestCase):
-    def test_python_without_library(self):
+    def test_missing_engine_never_falls_back(self):
         with patch.object(_accelerate, "_load", return_value=None):
-            with backend("auto"):
-                self.assertIsNone(_accelerate.detrend(np.ones((3, 1, 1))))
-            with backend("python"):
-                self.assertIsNone(_accelerate.runs(np.ones(3, dtype=bool)))
-            with backend("rust"):
-                with self.assertRaisesRegex(RuntimeError, "unavailable"):
-                    _accelerate.runs(np.ones(3, dtype=bool))
+            for mode in ("auto", "rust"):
+                with backend(mode):
+                    with self.assertRaisesRegex(RuntimeError, "unavailable"):
+                        _accelerate.detrend(np.ones((3, 1, 1)))
+        with patch.dict(os.environ, {"KLIMAPY_BACKEND": "python"}):
+            with self.assertRaisesRegex(ValueError, "removed"):
+                _accelerate.runs(np.ones(3, dtype=bool))
         with backend("invalid"):
             with self.assertRaises(ValueError):
                 _accelerate.runs(np.ones(3, dtype=bool))
@@ -109,26 +138,6 @@ class NumericalTests(unittest.TestCase):
             values,
             np.repeat(np.arange(2000, 2010), 30),
             np.tile(np.arange(30), 10),
-        )
-
-    def test_regrid(self):
-        lat, lon = np.arange(20.0, 40.0, 0.5), np.arange(100.0, 120.0, 0.5)
-        data = self.rng.normal(size=(len(lat), len(lon)))
-        data[self.rng.random(data.shape) < 0.2] = np.nan
-        for dtype in (np.float32, np.float64):
-            for reverse in (False, True):
-                y = lat[::-1] if reverse else lat
-                d = data[::-1] if reverse else data
-                self.compare(
-                    sd.area_weighted_regrid,
-                    y,
-                    lon,
-                    d.astype(dtype),
-                    np.array([19.0, 25.0, 30.0, 45.0]),
-                    np.array([99.0, 105.0, 110.0, 130.0]),
-                )
-        self.compare(
-            sd.area_weighted_regrid, lat, lon, data * float("nan"), lat[::5], lon[::5]
         )
 
     def test_public_etccdi(self):

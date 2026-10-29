@@ -4,32 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "klimapy"
-version = "1.0.0"
+version = "1.1.0"
 authors = [
     {name = "YuHaoRan", email = "yuhaoran251@mails.ucas.ac.cn"}
 ]
-description = "Python tools for climate data analysis including ETCCDI,BCSD modules"
+description = "Klimapy 为气候分析提供统一入口，用 Python 表达研究流程，让 Rust 执行底层计算，把精力留给问题本身。"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-dependencies = [
-    "numpy>=1.23.0",
-    "pandas>=1.5.0",
-    "xarray>=2023.1.0",
-    "tqdm>=4.60.0",
-    "cftime>=1.6.0",
-    "scipy>=1.9.0"
-]
+dependencies = ["numpy>=1.23.0"]
 
 [project.optional-dependencies]
-gis = ["rioxarray>=0.13", "geopandas>=0.12", "shapely>=1.8"]
-io = ["netCDF4>=1.6"]
-parallel = ["dask[array]>=2023.1"]
 dev = ["build", "twine", "ruff"]
 
 [project.urls]
+"Homepage" = "https://michalrees.bid/klimapy/"
+"Documentation" = "https://michalrees.bid/klimapy/docs/"
 "Bug Tracker" = "https://github.com/michalrees/klimapy/issues"
 "Source Code" = "https://github.com/michalrees/klimapy"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+klimapy = ["_licenses/*"]

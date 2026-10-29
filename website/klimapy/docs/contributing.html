@@ -1,0 +1,51 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：参与贡献。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/contributing.html"><link rel="stylesheet" href="manual.css"><title>参与贡献 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a aria-current="page" href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考与开发 / 参与贡献</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">开发与贡献</h1>
+<h2 id="section-2">环境和常用命令</h2>
+<pre><code class="language-bash">conda env create -f environment.yml
+conda run -n Test python -m pip install --no-deps --no-build-isolation .
+conda run -n Test python tools/manage.py test
+conda run -n Test python tools/manage.py test --installed
+</code></pre>
+<p>测试只允许在 conda Test 运行，且默认入口会从其他环境转交 Test。启动时验证禁用包
+未安装，运行时拦截导入，不允许静默跳过。日常验收只发现 tests/native；历史 tests
+根目录中的兼容测试仍待迁移，不能将当前 native 通过数目写成整库测试全部通过。</p>
+<p>Test 只包含运行和必要安装工具；不在其中安装 legacy/io/gis/dev extra。
+构建、Ruff 和发布工具使用独立工具环境或临时工具目录；Rust 检查使用 Cargo。
+源码构建需要 Cargo，失败不回退。build 与静态分析不要求使用 Test，但实际执行
+Python 数值测试和安装包测试必须使用 Test。详见 <a href="https://github.com/michalrees/Klimapy/blob/main/AGENTS.md">项目整体要求</a>。</p>
+<p>安装包验收必须加载实际安装 wheel；editable 安装会被 --installed 检查拒绝。
+源码模式可通过 PYTHONPATH=src 测试当前未打包修改；两种结果分别记录。</p>
+<p>清理先预览，再执行：</p>
+<pre><code class="language-bash">python tools/manage.py clean
+python tools/manage.py clean --apply
+python tools/manage.py clean --apply --native
+</code></pre>
+<p>清理仅删除列出的构建和缓存产物；<code>--native</code> 额外删除本地原生库。
+<code>work/</code>、<code>outputs/</code>、<code>data/</code> 属于使用者的科研资料，不由此命令删除。</p>
+<h2 id="section-3">新功能与目录</h2>
+<ul>
+<li>科学功能：放在 <code>src/klimapy/&lt;功能&gt;/</code>，在其 <code>__init__.py</code> 中明确导出。</li>
+<li>共用逻辑：放在 <code>_core/</code>；原生后端放在 <code>_backends/</code>；跨模块流程放在 <code>workflows/</code>。</li>
+<li>默认验收测试：放在 <code>tests/native/</code>，仅使用 NumPy/标准库，在 conda Test 验证。</li>
+<li>历史兼容测试：保留在 <code>tests/</code> 根目录，作为迁移清单，不计入当前最小环境通过数。</li>
+<li>性能测量：放在 <code>benchmarks/</code>，记录环境和数据，不用单机耗时作为脆弱的测试断言。</li>
+<li>文档：放在 <code>docs/&lt;功能&gt;/</code>，更新 <a href="https://github.com/michalrees/Klimapy/blob/main/docs/index.md">索引</a> 并使用相对链接。</li>
+<li>探索实验：放在 <code>experiments/</code>，结束后移入 <code>archive/</code> 并标明冻结状态。</li>
+</ul>
+<p>接口或计算口径发生变化时，更新 <a href="changelog.html">CHANGELOG</a> 和迁移说明。
+保留变更前后的科学含义；用 tests/native 的 NumPy/标准库参考验证 Rust，
+不向生产代码添加 Python 备用后端。
+降水变率仅接受规范包名 <code>PrecipitationVariability</code>，不再增加旧拼写兼容入口。</p>
+<h2 id="section-4">版本与发布</h2>
+<p>发布入口为 <code>.github/workflows/publish.yml</code>。它调用 Python 版本矩阵和 Rust/多平台/
+manylinux 可复用检查；只有检查、构建、安装计算测试全部通过，发布作业才可执行。</p>
+<p>发布前维护者应设置 <code>pyproject.toml</code> 版本、整理 CHANGELOG，再推送匹配的 <code>v&lt;版本&gt;</code> 标签。
+工作流会核对标签与安装包版本。普通提交和 PR 只检查，不发布。
+发布作业收集已验证的 manylinux、Windows、macOS 原生 wheel 与源码包。
+文件 I/O 的系统 libnetcdf/HDF5 运行依赖不随 wheel 打包；CI 必须准备这些运行库。
+本仓库的开发命令不自动提交、推送、创建标签或发布。</p>
+<h2 id="section-5">真实回归与数据接口</h2>
+<p>所有生产接口使用原生 Field，不新增历史框架依赖。每项功能改动同时扩展 Test 单元
+用例和 <code>tools/cn05_migration_checks.py</code> 中的 Test1 独立参考。<code>manage.py check</code> 包含真实
+比对；只有单元检查通过不能称为本地完整验收。详见 <a href="validation.html">验证范围</a>。
+原始数据、校正前副本和输出均不上传 GitHub。未提交来源仍按 AGENTS.md 分别记录。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="faq.html"><small>上一章</small>常见问题 ←</a><a href="changelog.html"><small>下一章</small>更新记录 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">环境和常用命令</a><a class="level-2" href="#section-3">新功能与目录</a><a class="level-2" href="#section-4">版本与发布</a><a class="level-2" href="#section-5">真实回归与数据接口</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

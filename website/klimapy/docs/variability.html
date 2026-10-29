@@ -1,0 +1,170 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：降水变率与趋势。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/variability.html"><link rel="stylesheet" href="manual.css"><title>降水变率与趋势 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a aria-current="page" href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 功能指南 / 降水变率与趋势</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">precip_variability_netcdf.py 说明</h1>
+<h2 id="section-2">导入方式</h2>
+<pre><code class="language-python">import klimapy as klipy
+</code></pre>
+<h2 id="section-3">调用方式</h2>
+<pre><code class="language-python">annual_var = klipy.PrecipitationVariability.compute_precip_variability(ds)
+trend = klipy.PrecipitationVariability.annual_precip_variability_trend(
+	annual_var.values,
+	annual_var[&quot;year&quot;].values,
+	baseline_years=None
+)
+</code></pre>
+<p>函数导入：</p>
+<pre><code class="language-python">from klimapy.PrecipitationVariability.precip_variability_netcdf import (
+    compute_precip_variability, compute_precip_variability_split,
+)
+</code></pre>
+<h2 id="section-4">1. 文件用途</h2>
+<p>本模块用于计算逐格点年降水变率及其线性趋势，适配 NetCDF 多格点气候数据（如 CMIP6/HiCPC）。</p>
+<p>核心思想：</p>
+<ol>
+<li>先去除年循环（季节项）。</li>
+<li>再去除长期线性趋势。</li>
+<li>最后按年计算标准差，得到年降水变率时间序列。</li>
+</ol>
+<h2 id="section-5">2. 数据与符号约定</h2>
+<ul>
+<li>时间索引：$t=1,2,\dots,T$</li>
+<li>年份：$y$</li>
+<li>年内日序（day of year）：$d \in {1,\dots,366}$</li>
+<li>格点位置：$(i,j)$</li>
+<li>原始降水：$P_t(i,j)$</li>
+<li>去年循环后的异常：$P'_t(i,j)$</li>
+<li>去趋势后的异常：$\tilde{P}_t(i,j)$</li>
+<li>年降水变率（年标准差）：$\sigma_y(i,j)$</li>
+</ul>
+<h2 id="section-6">3. 计算公式</h2>
+<h3 id="section-7">3.1 去除年循环（remove_annual_cycle）</h3>
+<p>对每个日序 $d$ 计算多年平均气候态：</p>
+<p>$$
+\overline{P}<em>d(i,j)=\frac{1}{N_d}\sum</em>{t\in{\text{DOY}=d}} P_t(i,j)
+$$</p>
+<p>其中 $N_d$ 为该日序样本数（忽略 NaN）。</p>
+<p>然后构造异常场：</p>
+<p>$$
+P'<em>t(i,j)=P_t(i,j)-\overline{P}</em>{d(t)}(i,j)
+$$</p>
+<p>说明：若传入 <code>baseline_years=(start,end)</code>，则 $\overline{P}_d$ 仅由该时间段内样本计算；当前主流程默认 None 使用全时段，显式基准期会传递到此函数。</p>
+<h3 id="section-8">3.2 去除线性趋势（remove_linear_trend）</h3>
+<p>对每个格点 $(i,j)$，对 $P'_t(i,j)$ 与时间序列 $t$ 做线性回归：</p>
+<p>$$
+\hat{P}'_t(i,j)=a(i,j),t+b(i,j)
+$$</p>
+<p>去趋势后：</p>
+<p>$$
+ilde{P}_t(i,j)=P'_t(i,j)-\hat{P}'_t(i,j)
+$$</p>
+<h3 id="section-9">3.3 年降水变率（calc_annual_precip_variability）</h3>
+<p>对每一年 $y$，以该年所有日值计算标准差：</p>
+<p>$$
+\sigma_y(i,j)=\operatorname{std}_{t\in y}\big(\tilde{P}_t(i,j)\big)
+$$</p>
+<p>生产实现由 Rust Welford 内核计算总体标准差（ddof=0），忽略 NaN。</p>
+<h3 id="section-10">3.4 变率趋势（annual_precip_variability_trend / calc_variability_trend）</h3>
+<p>对 $\sigma_y(i,j)$ 与年份 $y$ 做线性回归：</p>
+<p>$$
+\sigma_y(i,j)=k(i,j),y+c(i,j)
+$$</p>
+<p>其中 $k(i,j)$ 单位是“每年变化量”。再以多年平均变率归一化并换算为 <code>%/10年</code>：</p>
+<p>$$
+ext{Trend}_{%/10\text{yr}}(i,j)=\frac{k(i,j)}{\overline{\sigma}(i,j)}\times 100\times 10
+$$</p>
+<p>$$
+\overline{\sigma}(i,j)=\operatorname{mean}_y\big(\sigma_y(i,j)\big)
+$$</p>
+<p>若设置 <code>baseline_years</code>，则趋势回归与 $\overline{\sigma}$ 仅在该时段内计算。</p>
+<h2 id="section-11">4. 主要函数说明</h2>
+<h3 id="section-12">4.1 compute_precip_variability(ds, baseline_years=None, *, spatial_chunk_size=32, min_valid_fraction=0.9)</h3>
+<p>功能：计算全时段年降水变率序列（返回 <code>year, lat, lon</code>）。</p>
+<p>参数：</p>
+<ul>
+<li><code>ds</code>：<code>字段字典（变量名 → Field）</code>，输入数据集，需包含降水变量与 <code>time/lat/lon</code> 维度。</li>
+<li><code>baseline_years</code>：<code>(start, end)</code> 或 None。显式年份用于季节气候态，None 使用全时段；去趋势仍使用完整目标时段。</li>
+</ul>
+<p>返回：</p>
+<ul>
+<li><code>Field</code>，维度为 <code>('year', 'lat', 'lon')</code>，值为每年标准差 $\sigma_y(i,j)$。</li>
+</ul>
+<h3 id="section-13">4.2 annual_precip_variability_trend(annual_var, years, baseline_years=None)</h3>
+<p>功能：对年变率序列做线性趋势分析，输出 <code>%/10年</code>。</p>
+<p>参数：</p>
+<ul>
+<li><code>annual_var</code>：<code>ndarray</code>，形状 <code>(nyear, nlat, nlon)</code>，即 $\sigma_y(i,j)$。</li>
+<li><code>years</code>：<code>ndarray</code>，形状 <code>(nyear,)</code>，对应年份序列。</li>
+<li><code>baseline_years</code>：<code>(start, end)</code> 或 <code>None</code>，趋势计算时段。</li>
+</ul>
+<p>返回：</p>
+<ul>
+<li><code>ndarray</code>，形状 <code>(nlat, nlon)</code>，逐格点变率趋势（<code>%/10年</code>）。</li>
+</ul>
+<h3 id="section-14">4.3 calc_annual_precip_variability(data, years)</h3>
+<p>功能：按年计算逐格点标准差。</p>
+<p>参数：</p>
+<ul>
+<li><code>data</code>：<code>ndarray</code>，形状 <code>(time, lat, lon)</code>，通常为去年循环且去趋势后的异常。</li>
+<li><code>years</code>：<code>ndarray</code>，形状 <code>(time,)</code>，每个时间步对应年份。</li>
+</ul>
+<p>返回：</p>
+<ul>
+<li><code>annual_var</code>：<code>ndarray</code>，形状 <code>(nyear, nlat, nlon)</code>。</li>
+<li><code>year_unique</code>：<code>ndarray</code>，形状 <code>(nyear,)</code>。</li>
+</ul>
+<h3 id="section-15">4.4 remove_annual_cycle(precip, years, doy, baseline_years=None)</h3>
+<p>功能：去除年循环（DOY 气候态）。</p>
+<p>参数：</p>
+<ul>
+<li><code>precip</code>：<code>ndarray</code>，形状 <code>(time, lat, lon)</code>，原始逐日降水。</li>
+<li><code>years</code>：<code>ndarray</code>，形状 <code>(time,)</code>。</li>
+<li><code>doy</code>：<code>ndarray</code>，形状 <code>(time,)</code>，取值 1-366。</li>
+<li><code>baseline_years</code>：<code>(start, end)</code> 或 <code>None</code>，计算气候态使用的时段。</li>
+</ul>
+<p>返回：</p>
+<ul>
+<li><code>precip_anom</code>：<code>ndarray</code>，形状 <code>(time, lat, lon)</code>。</li>
+</ul>
+<h3 id="section-16">4.5 remove_linear_trend(data)</h3>
+<p>功能：逐格点去除线性趋势。</p>
+<p>参数：</p>
+<ul>
+<li><code>data</code>：<code>ndarray</code>，形状 <code>(time, lat, lon)</code>。</li>
+</ul>
+<p>返回：</p>
+<ul>
+<li><code>data_detrend</code>：<code>ndarray</code>，形状 <code>(time, lat, lon)</code>。</li>
+</ul>
+<h3 id="section-17">4.6 get_precip_var(ds)</h3>
+<p>功能：自动识别降水变量名。</p>
+<p>支持变量名（不区分大小写）：</p>
+<ul>
+<li><code>pr</code></li>
+<li><code>pre</code></li>
+<li><code>precipitation</code></li>
+<li><code>precip</code></li>
+</ul>
+<h3 id="section-18">4.7 compute_precip_variability_split(ds, split_year=2015)</h3>
+<p>功能：按时间分段分别计算变率序列：</p>
+<ul>
+<li>历史段：<code>year &lt; split_year</code></li>
+<li>未来段：<code>year &gt;= split_year</code></li>
+</ul>
+<p>每一段独立执行“去年循环 + 去趋势 + 年标准差”流程，返回历史段与未来段各自的年变率。</p>
+<h2 id="section-19">5. 输出与单位</h2>
+<ul>
+<li><code>PrecipVar</code>：年降水变率，单位与输入降水变量一致（例如 mm/day）。</li>
+<li><code>PrecipVarTrend</code>：变率趋势，单位 <code>%/10年</code>。</li>
+</ul>
+<p>解释：趋势为正表示年际波动增强，趋势为负表示年际波动减弱。</p>
+<h2 id="section-20">6. 使用注意事项</h2>
+<ol>
+<li>输入数据必须包含 <code>time/lat/lon</code> 维度，且 <code>time</code> 可转换为日期。</li>
+<li>年标准差基于逐日值计算，若年份缺测较多会影响稳定性。</li>
+<li>代码中大量使用 <code>np.nanmean/np.nanstd</code>，可容忍部分缺测，但不建议大面积缺测。</li>
+<li>若用于历史与未来对比，建议优先使用 <code>compute_precip_variability_split</code>，避免跨阶段混合气候态与趋势。</li>
+</ol>
+<h2 id="section-21">分块与质量控制</h2>
+<p>主流程按 <code>spatial_chunk_size</code> 分块载入日数据，接受任意排列的 time/lat/lon 及常见坐标别名。
+有效日默认至少占整年 90%，资料不足的格点为 NaN。季节索引使用月日模板，单独保留闰日。
+参考期缺少目标日的气候态时，该日异常保留 NaN。空参考期、空分段或不足两年的趋势报错。
+规范包名为 <code>PrecipitationVariability</code>；仅保留规范包名；<code>precipvariability</code> 短模块名仍可使用。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="bcsd-method.html"><small>上一章</small>BCSD 方法原理 ←</a><a href="linalg.html"><small>下一章</small>SVD 与 EOF →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">导入方式</a><a class="level-2" href="#section-3">调用方式</a><a class="level-2" href="#section-4">1. 文件用途</a><a class="level-2" href="#section-5">2. 数据与符号约定</a><a class="level-2" href="#section-6">3. 计算公式</a><a class="level-3" href="#section-7">3.1 去除年循环（remove_annual_cycle）</a><a class="level-3" href="#section-8">3.2 去除线性趋势（remove_linear_trend）</a><a class="level-3" href="#section-9">3.3 年降水变率（calc_annual_precip_variability）</a><a class="level-3" href="#section-10">3.4 变率趋势（annual_precip_variability_trend / calc_variability_trend）</a><a class="level-2" href="#section-11">4. 主要函数说明</a><a class="level-3" href="#section-12">4.1 compute_precip_variability(ds, baseline_years=None, *, spatial_chunk_size=32, min_valid_fraction=0.9)</a><a class="level-3" href="#section-13">4.2 annual_precip_variability_trend(annual_var, years, baseline_years=None)</a><a class="level-3" href="#section-14">4.3 calc_annual_precip_variability(data, years)</a><a class="level-3" href="#section-15">4.4 remove_annual_cycle(precip, years, doy, baseline_years=None)</a><a class="level-3" href="#section-16">4.5 remove_linear_trend(data)</a><a class="level-3" href="#section-17">4.6 get_precip_var(ds)</a><a class="level-3" href="#section-18">4.7 compute_precip_variability_split(ds, split_year=2015)</a><a class="level-2" href="#section-19">5. 输出与单位</a><a class="level-2" href="#section-20">6. 使用注意事项</a><a class="level-2" href="#section-21">分块与质量控制</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

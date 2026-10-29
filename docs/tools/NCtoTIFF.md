@@ -1,29 +1,23 @@
 # NetCDF 到 GeoTIFF
 
-安装 GIS 可选依赖：
-
-```bash
-pip install 'klimapy[gis]'
-```
+接口通过原生 NetCDF 读取数据，Rust 写出 WGS84 Float32 GeoTIFF，无 Python GIS 依赖。
 
 ```python
-import klimapy as klipy
-
-klipy.Supporting_Tools.nc_to_tiff(
-    nc_file='daily.nc', output_dir='tiffs',
-    variable='pr', clip_extent=(113,120,36,43),
-    start_year=2001, end_year=2010,
-)
+from klimapy.Supporting_Tools import nc_to_tiff
+paths = nc_to_tiff('daily.nc', 'outputs/tiffs', variable='pr',
+                   clip_extent=(113, 120, 36, 43), start_year=2001, end_year=2010)
 ```
 
-签名为 `nc_to_tiff(nc_file, output_dir, clip_extent=None, variable=None, start_year=None, end_year=None)`。
+签名保持 `nc_to_tiff(nc_file, output_dir, clip_extent=None, variable=None,
+start_year=None, end_year=None)`，返回生成文件路径列表。
 
-- `variable=None` 时仅在数据集有一个变量时自动选择，多变量需显式指定。
-- `clip_extent=None` 不裁剪；有范围时使用 WGS84 经度/纬度边界。
-- 时间筛选包含起止年份；无 time 维时导出单个文件。
-- 自动识别 lon/lat、longitude/latitude、x/y 等名称，并调整为西到东、北到南。
-- 输入坐标须为经纬度，不能把投影平面坐标当作经纬度使用。
+- 自动识别 lat/lon、latitude/longitude、x/y；坐标必须是真实 WGS84 经纬度，严格单调等距。
+- 输出从西到东、北到南；CF 数值时间按其日历解码，按 YYYYMMDD 命名。
+- `clip_extent` 为 west/east/south/north，按格点中心选取，空范围报错。
+- 年份筛选包含两端；没有 time 的二维变量可导出单文件，但不接受年份筛选。
+- 自动变量选择仅限唯一二维/三维数据变量；多变量需显式指定。
+- 输出为单 strip、无压缩、PixelIsArea、NaN nodata，单文件小于 4 GB。
+- 每时次只读取对应空间范围，先写临时文件、完成后替换目标。输入句柄始终关闭。
 
-日数据文件名为 `{variable}_YYYYMMDD.tiff`，无时间维时为 `{variable}.tiff`。
-原生 cftime 日期直接按年月日命名，不强制转换为公历。
-数据集通过上下文管理器关闭，包括发生验证或导出异常时。
+不支持非规则网格、曲线网格或将投影平面坐标当成经纬度。源文件需系统 libnetcdf/HDF5；
+GeoTIFF 写出不要求 GDAL。当前真实回归在 Test1 中用原生 GDAL 独立检查写出结果。

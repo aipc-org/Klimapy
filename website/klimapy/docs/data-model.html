@@ -1,0 +1,78 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：Field 与数据入口。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/data-model.html"><link rel="stylesheet" href="manual.css"><title>Field 与数据入口 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a aria-current="page" href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 开始使用 / Field 与数据入口</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">Field 与原生数据入口</h1>
+<h2 id="section-2">Field 是什么</h2>
+<p><code>klimapy.native.Field</code> 将数值与维度、坐标、属性一起传递。它是 eager 容器：传入或读取的数值已经位于内存中。</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>values</td>
+<td>NumPy 数组</td>
+</tr>
+<tr>
+<td>dims</td>
+<td>与数组轴一一对应的唯一维度名称</td>
+</tr>
+<tr>
+<td>coords</td>
+<td>每个维度的同长度一维坐标</td>
+</tr>
+<tr>
+<td>attrs</td>
+<td>变量属性，例如 units</td>
+</tr>
+<tr>
+<td>name</td>
+<td>变量名，默认 value</td>
+</tr>
+<tr>
+<td>coordinate_attrs</td>
+<td>坐标属性，例如 time 的 units、calendar</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">import numpy as np
+from klimapy.native import Field
+
+pr = Field(
+    values=np.ones((365, 2, 2)),
+    dims=(&quot;time&quot;, &quot;lat&quot;, &quot;lon&quot;),
+    coords={&quot;time&quot;: np.arange(365), &quot;lat&quot;: [30, 31], &quot;lon&quot;: [110, 111]},
+    attrs={&quot;units&quot;: &quot;mm/day&quot;}, name=&quot;pr&quot;,
+    coordinate_attrs={&quot;time&quot;: {
+        &quot;units&quot;: &quot;days since 2001-01-01&quot;, &quot;calendar&quot;: &quot;standard&quot;
+    }}
+)
+</code></pre>
+<p>坐标长度、轴数或维度名称不匹配会报错，不进行自动广播对齐。</p>
+<h2 id="section-3">从 NetCDF 读取</h2>
+<pre><code class="language-python">from klimapy.native import read_field
+
+pr = read_field(&quot;daily_pr.nc&quot;, &quot;pr&quot;, indexers={
+    &quot;lat&quot;: slice(0, 16), &quot;lon&quot;: slice(0, 16)
+})
+one_day = pr.isel(time=0)
+print(pr.shape, pr.dims, pr.attrs)
+print(pr.time.dates())
+</code></pre>
+<p><code>read_field</code> 只读取指定区域并关闭输入文件；<code>isel</code> 是对已有 Field 的位置选择。标量选择会移除对应维度。<code>spatial_chunk_size</code> 控制后续计算，不会将 Field 变成惰性数据。</p>
+<h2 id="section-4">时间与日历</h2>
+<p>TimeAxis 保存 CF 数值时间与 units/calendar，也支持 YYYYMMDD 日期编码。日尺度分析拒绝重复、倒序和非日尺度输入；指标适配层会将缺失日期补为 NaN，再执行覆盖率判断。</p>
+<p>支持的日历包括 standard / Gregorian、proleptic Gregorian、Julian、noleap、all_leap 和 360_day。不同日历的年长度不同，不应直接把所有年份都当作 365 天。支持范围为公元 1 至 9999 年。</p>
+<h2 id="section-5">写出结果</h2>
+<pre><code class="language-python">pr.to_netcdf(&quot;new_daily_pr.nc&quot;)
+</code></pre>
+<p>路径需尚不存在，避免意外覆盖。文件坐标必须是数值类型；时间写出应带正确的 CF units 和 calendar。字段属性不会替你推断真实的数据单位。</p>
+<h2 id="section-6">低层文件访问</h2>
+<pre><code class="language-python">from klimapy.native import Dataset
+
+with Dataset(&quot;daily_pr.nc&quot;) as ds:
+    print(ds.variables)
+    block = ds[&quot;pr&quot;][0:30, 0:16, 0:16]
+</code></pre>
+<p>Dataset 使用上下文管理器关闭原生句柄。高级别流程优先使用 <code>read_field</code>；大数据文件可通过 Dataset 明确切片，再调用相应算法。各算法输入轴的要求见功能章节。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="installation.html"><small>上一章</small>安装与环境 ←</a><a href="quickstart.html"><small>下一章</small>快速上手 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">Field 是什么</a><a class="level-2" href="#section-3">从 NetCDF 读取</a><a class="level-2" href="#section-4">时间与日历</a><a class="level-2" href="#section-5">写出结果</a><a class="level-2" href="#section-6">低层文件访问</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

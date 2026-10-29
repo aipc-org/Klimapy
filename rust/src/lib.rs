@@ -19,36 +19,56 @@ pub unsafe extern "C" fn detrend(
     let source = std::slice::from_raw_parts(input, len);
     let result = std::slice::from_raw_parts_mut(output, len);
     result.fill(f64::NAN);
-    for cell in 0..cells {
-        let (mut count, mut sum_t, mut sum_y) = (0usize, 0.0, 0.0);
-        for t in 0..steps {
+    if steps == 0 || cells == 0 {
+        return 0;
+    }
+    // Scan contiguous time rows; retain only O(cells) regression state.
+    let mut count = vec![0usize; cells];
+    let mut mean_t = vec![0.0; cells];
+    let mut mean_y = vec![0.0; cells];
+    for t in 0..steps {
+        for cell in 0..cells {
             let y = source[t * cells + cell];
             if !y.is_nan() {
-                count += 1;
-                sum_t += t as f64;
-                sum_y += y;
+                count[cell] += 1;
+                mean_t[cell] += t as f64;
+                mean_y[cell] += y;
             }
-        }
-        if count < 2 {
-            continue;
-        }
-        let mean_t = sum_t / count as f64;
-        let mean_y = sum_y / count as f64;
-        let (mut tt, mut ty) = (0.0, 0.0);
-        for t in 0..steps {
-            let y = source[t * cells + cell];
-            if !y.is_nan() {
-                let dt = t as f64 - mean_t;
-                tt += dt * dt;
-                ty += dt * (y - mean_y);
-            }
-        }
-        let slope = ty / tt;
-        let intercept = mean_y - slope * mean_t;
-        for t in 0..steps {
-            result[t * cells + cell] = source[t * cells + cell] - (slope * t as f64 + intercept);
         }
     }
+    for cell in 0..cells {
+        if count[cell] >= 2 {
+            mean_t[cell] /= count[cell] as f64;
+            mean_y[cell] /= count[cell] as f64;
+        }
+    }
+    let mut tt = vec![0.0; cells];
+    let mut ty = vec![0.0; cells];
+    for t in 0..steps {
+        for cell in 0..cells {
+            let y = source[t * cells + cell];
+            if !y.is_nan() && count[cell] >= 2 {
+                let dt = t as f64 - mean_t[cell];
+                tt[cell] += dt * dt;
+                ty[cell] += dt * (y - mean_y[cell]);
+            }
+        }
+    }
+    for cell in 0..cells {
+        if count[cell] >= 2 {
+            ty[cell] /= tt[cell];
+            mean_y[cell] -= ty[cell] * mean_t[cell];
+        }
+    }
+    for t in 0..steps {
+        for cell in 0..cells {
+            if count[cell] >= 2 {
+                result[t * cells + cell] =
+                    source[t * cells + cell] - (ty[cell] * t as f64 + mean_y[cell]);
+            }
+        }
+    }
+
     0
 }
 
@@ -144,73 +164,22 @@ pub unsafe extern "C" fn relative_trend(
     0
 }
 
-/// Match Python's center-selected, cosine-weighted BCSD coarse-grid reduction.
-/// # Safety
-/// source: nlat*nlon doubles; weights: nlat doubles; masks: tlat*nlat and
-/// tlon*nlon bytes; output: tlat*tlon doubles. Valid disjoint buffers required.
+mod grid;
+mod netcdf;
+
+/// Version the ABI so stale local binaries cannot silently run different semantics.
 #[no_mangle]
-pub unsafe extern "C" fn regrid(
-    source: *const f64,
-    weights: *const f64,
-    lat_mask: *const u8,
-    lon_mask: *const u8,
-    output: *mut f64,
-    nlat: usize,
-    nlon: usize,
-    tlat: usize,
-    tlon: usize,
-) -> i32 {
-    let sizes = [
-        nlat.checked_mul(nlon),
-        tlat.checked_mul(nlat),
-        tlon.checked_mul(nlon),
-        tlat.checked_mul(tlon),
-    ];
-    if sizes
-        .iter()
-        .any(|n| n.is_none_or(|v| v > isize::MAX as usize / 8))
-        || nlat > isize::MAX as usize / 8
-        || source.is_null()
-        || weights.is_null()
-        || lat_mask.is_null()
-        || lon_mask.is_null()
-        || output.is_null()
-    {
-        return 1;
-    }
-    let data = std::slice::from_raw_parts(source, sizes[0].unwrap());
-    let w = std::slice::from_raw_parts(weights, nlat);
-    let lat = std::slice::from_raw_parts(lat_mask, sizes[1].unwrap());
-    let lon = std::slice::from_raw_parts(lon_mask, sizes[2].unwrap());
-    let out = std::slice::from_raw_parts_mut(output, sizes[3].unwrap());
-    out.fill(f64::NAN);
-    for i in 0..tlat {
-        // Python slices between the first and last selected source centers.
-        let rows = &lat[i * nlat..(i + 1) * nlat];
-        let Some(first_row) = rows.iter().position(|v| *v != 0) else {
-            continue;
-        };
-        let last_row = rows.iter().rposition(|v| *v != 0).unwrap();
-        for j in 0..tlon {
-            let cols = &lon[j * nlon..(j + 1) * nlon];
-            let Some(first_col) = cols.iter().position(|v| *v != 0) else {
-                continue;
-            };
-            let last_col = cols.iter().rposition(|v| *v != 0).unwrap();
-            let (mut sum, mut total) = (0.0, 0.0);
-            for row in first_row..=last_row {
-                for col in first_col..=last_col {
-                    let v = data[row * nlon + col];
-                    if !v.is_nan() {
-                        sum += v * w[row];
-                        total += w[row];
-                    }
-                }
-            }
-            if total > 0.0 {
-                out[i * tlon + j] = sum / total;
-            }
-        }
-    }
-    0
+pub extern "C" fn klimapy_abi_version() -> u32 {
+    4
 }
+mod linalg;
+mod variability;
+
+mod indices;
+mod remap;
+#[rustfmt::skip]
+#[allow(dead_code)]
+#[path = "../vendor/splinefit/dierckx.rs"]
+mod fitpack;
+mod correction;
+mod spatial_tools;

@@ -6,3 +6,12 @@ recursive-include tools *.sh *.py
 include CONTRIBUTING.md CHANGELOG.md
 recursive-include benchmarks *.py *.md
 include benchmarks/results/reference-2026-10-19.json
+
+include AGENTS.md environment.yml
+prune data
+
+recursive-include rust/vendor *.rs *.md LICENSE-*
+include environment-comparison.yml
+
+prune outputs
+prune work

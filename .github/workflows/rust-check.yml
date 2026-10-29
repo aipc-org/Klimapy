@@ -1,4 +1,4 @@
-name: Check optional Rust backend
+name: Check required Rust engine
 on:
   workflow_call:
   workflow_dispatch:
@@ -24,6 +24,18 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy --component rustfmt
           rustup default stable
           python -m pip install build ruff
+      - name: Install native NetCDF runtime on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libnetcdf-dev
+      - name: Install native NetCDF runtime on macOS
+        if: runner.os == 'macOS'
+        run: brew install netcdf
+      - name: Install native NetCDF runtime on Windows
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install netcdf-c:x64-windows
+          echo "C:/vcpkg/installed/x64-windows/bin" >> "$GITHUB_PATH"
+          echo "KLIMAPY_NETCDF_LIBRARY=C:/vcpkg/installed/x64-windows/bin/netcdf.dll" >> "$GITHUB_ENV"
       - name: Check Rust and build native wheel
         env:
           KLIMAPY_BUILD_RUST: '1'
@@ -31,13 +43,16 @@ jobs:
           python tools/manage.py lint --rust
           python tools/manage.py build --rust on --outdir native-dist
       # The C ABI library must load on a different Python minor version.
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: conda-incubator/setup-miniconda@04b72d7799e2bae3771b041de9b46c710d29caab # v4
         with:
+          miniforge-version: latest
+          activate-environment: Test
+          environment-file: environment.yml
           python-version: '3.12'
       - name: Verify installed wheel and numerical compatibility
         run: |
-          python -m pip install native-dist/*.whl
-          python tools/manage.py test --installed --require-rust
+          conda run -n Test python -m pip install --no-deps native-dist/*.whl
+          conda run -n Test python tools/manage.py test --installed --require-rust
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-wheel-${{ matrix.os }}

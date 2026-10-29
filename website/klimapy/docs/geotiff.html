@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：GeoTIFF 导出。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/geotiff.html"><link rel="stylesheet" href="manual.css"><title>GeoTIFF 导出 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a aria-current="page" href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 功能指南 / GeoTIFF 导出</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">NetCDF 到 GeoTIFF</h1>
+<p>接口通过原生 NetCDF 读取数据，Rust 写出 WGS84 Float32 GeoTIFF，无 Python GIS 依赖。</p>
+<pre><code class="language-python">from klimapy.Supporting_Tools import nc_to_tiff
+paths = nc_to_tiff('daily.nc', 'outputs/tiffs', variable='pr',
+                   clip_extent=(113, 120, 36, 43), start_year=2001, end_year=2010)
+</code></pre>
+<p>签名保持 <code>nc_to_tiff(nc_file, output_dir, clip_extent=None, variable=None, start_year=None, end_year=None)</code>，返回生成文件路径列表。</p>
+<ul>
+<li>自动识别 lat/lon、latitude/longitude、x/y；坐标必须是真实 WGS84 经纬度，严格单调等距。</li>
+<li>输出从西到东、北到南；CF 数值时间按其日历解码，按 YYYYMMDD 命名。</li>
+<li><code>clip_extent</code> 为 west/east/south/north，按格点中心选取，空范围报错。</li>
+<li>年份筛选包含两端；没有 time 的二维变量可导出单文件，但不接受年份筛选。</li>
+<li>自动变量选择仅限唯一二维/三维数据变量；多变量需显式指定。</li>
+<li>输出为单 strip、无压缩、PixelIsArea、NaN nodata，单文件小于 4 GB。</li>
+<li>每时次只读取对应空间范围，先写临时文件、完成后替换目标。输入句柄始终关闭。</li>
+</ul>
+<p>不支持非规则网格、曲线网格或将投影平面坐标当成经纬度。源文件需系统 libnetcdf/HDF5；
+GeoTIFF 写出不要求 GDAL。当前真实回归在 Test1 中用原生 GDAL 独立检查写出结果。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="spatial.html"><small>上一章</small>空间统计与区域掩膜 ←</a><a href="api.html"><small>下一章</small>API 参考 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

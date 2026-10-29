@@ -33,8 +33,7 @@ wheelhouse/
 # Scientific runs: caller-owned data and results
 /work/
 /outputs/
-/data/raw/
-/data/processed/
+/data/
 
 # Native builds and machine-local benchmark measurements
 **/target/

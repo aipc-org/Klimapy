@@ -1,76 +1,58 @@
 # 安装与快速开始
 
-## 安装
+基础依赖只有 NumPy，Rust 是必需引擎。源码构建需要 Cargo；原生文件接口需要系统
+libnetcdf/HDF5。所有生产功能均已改用原生接口，不需要旧 Python 数据框架。
 
 ```bash
-pip install klimapy
-pip install 'klimapy[gis]'       # 区域矢量文件与 GeoTIFF 导出
-pip install 'klimapy[io]'        # NetCDF4/HDF5 读写和增量压缩输出
-pip install 'klimapy[parallel]'  # xarray/Dask 分块数据源
+conda env create -f environment.yml
+conda run -n Test python -m pip install --no-deps --no-build-isolation .
+conda run -n Test python tools/manage.py test
 ```
 
-核心依赖为 NumPy、pandas、xarray、SciPy、cftime、tqdm，不强制安装 GIS 库。
-源码安装可选编译 Rust：
-
-```bash
-KLIMAPY_BUILD_RUST=1 pip install .
-KLIMAPY_BUILD_RUST=0 pip install .  # 仅 Python
-```
-
-## 一次计算多个指标
+## 数据、指标和降水变率
 
 ```python
-import xarray as xr
 import klimapy as klipy
+from klimapy.native import read_field
 
-with xr.open_dataset('daily_pr.nc') as ds:
-    indices = klipy.ETCCDI.compute_indices(
-        ds['pr'], ['PRCPTOT', 'RX1DAY', 'CDD', 'R95mm_days'],
-        baseline_years=(1981, 2010), spatial_chunk_size=32,
-    )
-indices.to_netcdf('indices.nc')
+pr = read_field('daily_pr.nc', 'pr',
+                indexers={'lat': slice(0, 16), 'lon': slice(0, 16)})
+print(pr.values.shape, pr.dims, pr.coords, pr.attrs)
+indices = klipy.ETCCDI.compute_indices(
+    pr, ['PRCPTOT', 'RX1DAY', 'CDD', 'R95mm_days'],
+    baseline_years=(1981, 2010), spatial_chunk_size=8)
+indices['RX1DAY'].to_netcdf('rx1day.nc')
+annual = klipy.PrecipitationVariability.compute_precip_variability(
+    pr, baseline_years=(1981, 2010), spatial_chunk_size=8)
 ```
 
-分块时一个空间块内的数据会载入内存，完成后只保留聚合结果。
-有 Dask 时也可通过 `xr.open_dataset(..., chunks={...})` 管理数据源。
+`Field` 是明确的 NumPy 数据与坐标容器，`isel` 支持按维度位置选取，批量指标返回字典。
+它不模拟旧框架的任意运算。先用 `read_field(indexers=...)` 限制文件读取范围；
+`spatial_chunk_size` 限制计算工作集，不会将已整体读取的数组变成惰性文件对象。
+时间保持 CF 数值及 units/calendar；`pr.time.dates()` 返回年月日与绝对日序。
+降水变率 `baseline_years=None` 使用全时段气候态。
 
-## 降水变率
-
-包名统一为 `PrecipitationVariability`，旧拼写已移除。
-
-```python
-with xr.open_dataset('daily_pr.nc') as ds:
-    annual = klipy.PrecipitationVariability.compute_precip_variability(
-        ds, baseline_years=(1981, 2010), spatial_chunk_size=32,
-    )
-```
-
-`baseline_years=None` 使用全时段气候态；显式基准期现在实际参与计算。
-
-## BC、SD 与多模型批量处理
+## BC、SD 和批处理
 
 ```python
-jobs = [dict(
-    obs_path='obs.nc', gcm_hist_path='historical.nc', gcm_fut_path='future.nc',
-    model_name='example', ref_start_year=1981, ref_end_year=2010,
-)]
-report = klipy.process_models(
-    jobs, output_dir='output',
+jobs = [dict(obs_path='obs.nc', gcm_hist_path='historical.nc', gcm_fut_path='future.nc',
+             model_name='example', ref_start_year=1981, ref_end_year=2010)]
+report = klipy.process_models(jobs, output_dir='outputs', strict=True,
     bc_options={'time_chunk_size': 64, 'work_dir': 'work/example'},
-    sd_options={'time_chunk_size': 16, 'spatial_chunk_size': 16},
-)
-print(report['completed'])
-print(report['failed'])
+    sd_options={'time_chunk_size': 16, 'spatial_chunk_size': 16})
 ```
 
-`work_dir` 是调用者管理的磁盘中间目录；处理完成并释放 BC 数组后可删除。
-不设置它时，BC 校正输出保存在内存中。SD 的中间文件会自动清理。
+这些文件流程保留按时间块/空间行读取。BC 的磁盘缓冲属于调用者；组合流程会在 SD
+结束后释放 BC 输出。独立调用 BC 时应在消费结果后显式 `close_result`。
 
-默认使用标准 logging；需要查看计算进度时：
+## 验收
 
-```python
-import logging
-logging.basicConfig(level=logging.INFO)
+```bash
+python tools/manage.py compare               # CN05.1：Test 原生 + Test1 独立参考
+python tools/manage.py test --installed      # 检查真正安装包
+python tools/manage.py compare --installed   # 安装包的真实数据比对
 ```
 
-科学计算口径与行为变化见 [迁移说明](../development/quality-and-migration.md)。
+`data/` 和 `outputs/` 不进 Git；缺少本地数据或 Test1 会明确报错。
+CI 单元验收不冒充本地真实数据验收。详见 [验证说明](../development/validation.md)、
+[源码结构](../development/source-layout.md) 和 [长期约定](../../AGENTS.md)。

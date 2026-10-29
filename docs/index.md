@@ -8,6 +8,7 @@
 | [interpolation](interpolation/SpatialInterpolation.md) | 双线性、守恒、最近邻和局部 Patch 插值 |
 | [etccdi](etccdi/ETCCDI.md) | 极端指数、批量指标计算 |
 | [bcsd](bcsd/BiasCorrectionSpatialDownscaling.md) | [Bias Correction](bcsd/BiasCorrection.md) 偏差校正、[Spatial Downscaling](bcsd/SpatialDownscaling.md) 空间降尺度与一体化流程 |
+| [linalg](linalg/SVD-EOF.md) | Rust SVD、加权 EOF 与原场重建 |
 | [variability](variability/PrecipVariability.md) | 降水变率与趋势 |
 | [tools](tools/CSM.md) | 空间统计和 [GeoTIFF 导出](tools/NCtoTIFF.md) |
 | [development](development/quality-and-migration.md) | 计算口径、兼容迁移、[Rust 后端](development/RustBackend.md)、[验证与发布](development/validation.md)、[源码结构](development/source-layout.md) |
@@ -15,6 +16,8 @@
 新文档使用相对链接，并在本索引增加入口。测试会检查本地 Markdown 链接是否存在。
 
 仓库维护：[贡献约定](../CONTRIBUTING.md) · [更新记录](../CHANGELOG.md) · [性能测量](../benchmarks/README.md)。
+
+参考库交叉比对：[Test1 环境](development/comparison-environment.md)（独立于最小验收环境 Test）。
 
 ## 文档维护约定
 

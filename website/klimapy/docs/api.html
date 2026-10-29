@@ -1,0 +1,309 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Klimapy 官方手册：API 参考。1.1.0 原生 Rust 架构的使用指南与 API 参考。"><link rel="canonical" href="https://michalrees.bid/klimapy/docs/api.html"><link rel="stylesheet" href="manual.css"><title>API 参考 — Klimapy 官方手册</title></head><body><a class="skip" href="#content">跳转正文</a><header class="mobile"><button id="menu" aria-expanded="false" aria-controls="sidebar">☰ 目录</button><a href="../">κ Klimapy</a><button class="theme" aria-label="切换明暗主题">◐</button></header><aside id="sidebar"><a class="logo" href="index.html"><span>κ</span><b>Klimapy</b></a><p class="subtitle">官方手册 <span>1.1.0</span></p><label class="search-label" for="search">搜索手册</label><input id="search" type="search" placeholder="搜索函数、参数、关键词…" autocomplete="off"><div id="results" role="region" aria-label="搜索结果" aria-live="polite" hidden></div><nav aria-label="手册目录"><h3>开始使用</h3><a href="index.html">官方手册</a><a href="installation.html">安装与环境</a><a href="data-model.html">Field 与数据入口</a><a href="quickstart.html">快速上手</a><h3>功能指南</h3><a href="etccdi.html">极端气候指数</a><a href="interpolation.html">空间插值与重映射</a><a href="bias-correction.html">BC 偏差校正</a><a href="downscaling.html">SD 空间降尺度</a><a href="bcsd.html">BCSD 完整流程</a><a href="bcsd-method.html">BCSD 方法原理</a><a href="variability.html">降水变率与趋势</a><a href="linalg.html">SVD 与 EOF</a><a href="spatial.html">空间统计与区域掩膜</a><a href="geotiff.html">GeoTIFF 导出</a><h3>参考与开发</h3><a aria-current="page" href="api.html">API 参考</a><a href="migration.html">迁移与计算口径</a><a href="backend.html">Rust 引擎</a><a href="validation.html">验证与比对</a><a href="comparison.html">Test1 参考环境</a><a href="faq.html">常见问题</a><a href="contributing.html">参与贡献</a><a href="changelog.html">更新记录</a></nav><div class="side-bottom"><a href="../">← 项目主页</a><a href="https://github.com/michalrees/Klimapy">GitHub ↗</a></div></aside><div class="layout"><main id="content"><div class="topline"><span>Klimapy / 参考与开发 / API 参考</span><button class="theme" aria-label="切换明暗主题">◐</button></div><div class="version-note"><b>1.1.0 原生架构</b> · 适用于 Field / Rust 接口；旧版使用者请先阅读<a href="migration.html">迁移说明</a>。</div><article><h1 id="section-1">API 参考</h1>
+<p>以下签名从本次源码静态提取，不导入生产包，也不执行数值计算。函数的科学口径、返回值和边界请结合功能指南阅读。动态生成的指标另列于页末。</p>
+<h2 id="section-2">数据模型</h2>
+<h3 id="section-3">TimeAxis</h3>
+<pre><code class="language-python">klimapy.native.TimeAxis
+</code></pre>
+<pre><code class="language-python">TimeAxis.dates(self)
+</code></pre>
+<pre><code class="language-python">TimeAxis.calendar(self)
+</code></pre>
+<pre><code class="language-python">TimeAxis.labels(self)
+</code></pre>
+<p>Daily CF time metadata; years/months/days use the declared calendar.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/field.py#L102">源码</a></p>
+<h3 id="section-4">Field</h3>
+<pre><code class="language-python">klimapy.native.Field
+</code></pre>
+<p><code>Field(values, dims, coords, attrs={}, name=&quot;value&quot;, coordinate_attrs={})</code></p>
+<p>见 <a href="data-model.html">Field 与数据入口</a>。</p>
+<pre><code class="language-python">Field.shape(self)
+</code></pre>
+<pre><code class="language-python">Field.time(self)
+</code></pre>
+<pre><code class="language-python">Field.isel(self, **indexers)
+</code></pre>
+<pre><code class="language-python">Field.to_netcdf(self, path)
+</code></pre>
+<p>Eager NumPy payload with named dimensions and explicit coordinate metadata.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/field.py#L198">源码</a></p>
+<h3 id="section-5">read_field</h3>
+<pre><code class="language-python">klimapy.native.read_field(path, variable=None, *, indexers=None)
+</code></pre>
+<p>Read only the selected numeric variable region; close the native file.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/field.py#L283">源码</a></p>
+<h2 id="section-6">原生文件</h2>
+<h3 id="section-7">Dataset</h3>
+<pre><code class="language-python">klimapy.native.Dataset
+</code></pre>
+<pre><code class="language-python">Dataset.close(self)
+</code></pre>
+<pre><code class="language-python">Dataset.names(self, group='')
+</code></pre>
+<pre><code class="language-python">Dataset.variables(self)
+</code></pre>
+<pre><code class="language-python">Dataset.set_attr(self, name, value)
+</code></pre>
+<pre><code class="language-python">Dataset.create_variable(self, name, dims, shape, *, dtype='float64', compression=0, attrs=None)
+</code></pre>
+<p>Closable native file handle, root variable listing and explicit group paths.</p>
+<p>Read slices have unit stride. Numeric variables are returned as float64;
+Rust masks fill/missing values before applying scale_factor/add_offset.
+Unsupported encodings raise rather than silently falling back.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/io.py#L105">源码</a></p>
+<h3 id="section-8">open_dataset</h3>
+<pre><code class="language-python">klimapy.native.open_dataset(path)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/io.py#L436">源码</a></p>
+<h2 id="section-9">线性代数</h2>
+<h3 id="section-10">svd</h3>
+<pre><code class="language-python">klimapy.native.svd(data, *, n_modes=None, tol=1e-12, max_sweeps=100)
+</code></pre>
+<p>Return U, s, Vt with data ~= (U * s) @ Vt, compact shapes only.</p>
+<p>Rust uses scaled one-sided Jacobi rotations without forming a covariance
+matrix. n_modes truncates a complete dense factorization; it is not a
+randomized or out-of-core solver. Mode signs are fixed deterministically,
+while repeated singular subspaces remain non-unique.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/linalg.py#L63">源码</a></p>
+<h3 id="section-11">EOFResult</h3>
+<pre><code class="language-python">klimapy.native.EOFResult
+</code></pre>
+<pre><code class="language-python">EOFResult.reconstruct(self, n_modes=None, *, add_mean=True)
+</code></pre>
+<p>Physical-unit patterns and unscaled PCs; weighted patterns are orthonormal.</p>
+<p>eigenvalues = s**2/(ntime-ddof). Fractions always use total variance across
+all modes, even when only n_modes are returned. Excluded cells remain NaN.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/linalg.py#L97">源码</a></p>
+<h3 id="section-12">eof</h3>
+<pre><code class="language-python">klimapy.native.eof(data, *, n_modes=None, weights=None, lat=None, center=True, ddof=1, tol=1e-12, max_sweeps=100)
+</code></pre>
+<p>EOF analysis of (time, *space) real arrays with explicit area weights.</p>
+<p>weights are nonnegative AREA weights (broadcast to spatial dimensions), not
+their square roots. Rust uses sqrt(weights) for the SVD and unweights output
+patterns. For (time, lat, lon), lat computes cos(latitude) area weights.
+All-NaN cells and zero weights are excluded; intermittent NaNs are rejected.
+center=False performs uncentered decomposition; eigenvalues then describe
+second moments rather than centered covariance. No detrending is implicit.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/native/linalg.py#L147">源码</a></p>
+<h2 id="section-13">ETCCDI</h2>
+<h3 id="section-14">check_data</h3>
+<pre><code class="language-python">klimapy.ETCCDI.check_data(pr, valid_var_names=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L24">源码</a></p>
+<h3 id="section-15">check_temperature_data</h3>
+<pre><code class="language-python">klimapy.ETCCDI.check_temperature_data(temp, valid_var_names=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L28">源码</a></p>
+<h3 id="section-16">select_baseline_period</h3>
+<pre><code class="language-python">klimapy.ETCCDI.select_baseline_period(data, start_year, end_year)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L100">源码</a></p>
+<h3 id="section-17">PRCPTOT</h3>
+<pre><code class="language-python">klimapy.ETCCDI.PRCPTOT(pr, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L127">源码</a></p>
+<h3 id="section-18">R1mm_days</h3>
+<pre><code class="language-python">klimapy.ETCCDI.R1mm_days(pr, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L138">源码</a></p>
+<h3 id="section-19">SDII</h3>
+<pre><code class="language-python">klimapy.ETCCDI.SDII(pr, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L148">源码</a></p>
+<h3 id="section-20">RXnday</h3>
+<pre><code class="language-python">klimapy.ETCCDI.RXnday(pr, window=5, *, freq='YS', min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L159">源码</a></p>
+<h3 id="section-21">RX1DAY</h3>
+<pre><code class="language-python">klimapy.ETCCDI.RX1DAY(pr, *, freq='YS', min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L176">源码</a></p>
+<h3 id="section-22">RX5DAY</h3>
+<pre><code class="language-python">klimapy.ETCCDI.RX5DAY(pr, *, freq='YS', min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L182">源码</a></p>
+<h3 id="section-23">CDD</h3>
+<pre><code class="language-python">klimapy.ETCCDI.CDD(pr, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L188">源码</a></p>
+<h3 id="section-24">CWD</h3>
+<pre><code class="language-python">klimapy.ETCCDI.CWD(pr, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L194">源码</a></p>
+<h3 id="section-25">Rnnmm</h3>
+<pre><code class="language-python">klimapy.ETCCDI.Rnnmm(pr, threshold=10.0, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L200">源码</a></p>
+<h3 id="section-26">TN10p</h3>
+<pre><code class="language-python">klimapy.ETCCDI.TN10p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L420">源码</a></p>
+<h3 id="section-27">TX10p</h3>
+<pre><code class="language-python">klimapy.ETCCDI.TX10p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L432">源码</a></p>
+<h3 id="section-28">TN90p</h3>
+<pre><code class="language-python">klimapy.ETCCDI.TN90p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L444">源码</a></p>
+<h3 id="section-29">TX90p</h3>
+<pre><code class="language-python">klimapy.ETCCDI.TX90p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L456">源码</a></p>
+<h3 id="section-30">WSDI</h3>
+<pre><code class="language-python">klimapy.ETCCDI.WSDI(tx, baseline_years=(1961, 1990), *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L468">源码</a></p>
+<h3 id="section-31">CSDI</h3>
+<pre><code class="language-python">klimapy.ETCCDI.CSDI(tn, baseline_years=(1961, 1990), *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L480">源码</a></p>
+<h3 id="section-32">GSL</h3>
+<pre><code class="language-python">klimapy.ETCCDI.GSL(tg, hemisphere='NH', *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L492">源码</a></p>
+<h3 id="section-33">DTR</h3>
+<pre><code class="language-python">klimapy.ETCCDI.DTR(tx, tn, *, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L515">源码</a></p>
+<h3 id="section-34">compute_indices</h3>
+<pre><code class="language-python">klimapy.ETCCDI.compute_indices(data, indices=None, *, baseline_years=None, min_valid_fraction=0.9, spatial_chunk_size=None, index_options=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/ETCCDI/ETCCDI.py#L544">源码</a></p>
+<h2 id="section-35">偏差校正</h2>
+<h3 id="section-36">BC</h3>
+<pre><code class="language-python">klimapy.BCSD.BiasCorrection.BC(obs_path, gcm_hist_path, gcm_fut_path, model_name, ref_start_year, ref_end_year, *, strict=False, time_chunk_size=128, work_dir=None, window_size=None, n_quantiles=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/BCSD/BiasCorrection.py#L35">源码</a></p>
+<h3 id="section-37">close_result</h3>
+<pre><code class="language-python">klimapy.BCSD.BiasCorrection.close_result(result, *, remove_work_files=False)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/BCSD/BiasCorrection.py#L205">源码</a></p>
+<h2 id="section-38">降尺度</h2>
+<h3 id="section-39">SD</h3>
+<pre><code class="language-python">klimapy.BCSD.SpatialDownscaling.SD(obs_path, bc_result, output_dir, ref_start_year, ref_end_year, *, strict=False, time_chunk_size=32, spatial_chunk_size=16)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/BCSD/SpatialDownscaling.py#L44">源码</a></p>
+<h2 id="section-40">插值</h2>
+<h3 id="section-41">Regridder</h3>
+<pre><code class="language-python">klimapy.Interpolation.Regridder
+</code></pre>
+<pre><code class="language-python">Regridder.close(self)
+</code></pre>
+<p>Reusable Rust weights; supports explicit close/context management.</p>
+<p>No implicit extrapolation or filling. Conservative destinations require
+complete coverage; second order uses piecewise linear gradient moments.
+Patch is a local quadratic 3x3 least-squares fit, not ESMF multi-patch.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L68">源码</a></p>
+<h3 id="section-42">interpolate</h3>
+<pre><code class="language-python">klimapy.Interpolation.interpolate(data, target_grid=None, method='bilinear', *, source_grid=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L205">源码</a></p>
+<h3 id="section-43">no_interpolation</h3>
+<pre><code class="language-python">klimapy.Interpolation.no_interpolation(data)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L212">源码</a></p>
+<h3 id="section-44">bilinear</h3>
+<pre><code class="language-python">klimapy.Interpolation.bilinear(data, target_grid)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L216">源码</a></p>
+<h3 id="section-45">nearest_neighbor</h3>
+<pre><code class="language-python">klimapy.Interpolation.nearest_neighbor(data, target_grid)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L220">源码</a></p>
+<h3 id="section-46">first_order_conservative</h3>
+<pre><code class="language-python">klimapy.Interpolation.first_order_conservative(data, target_grid, *, source_grid=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L224">源码</a></p>
+<h3 id="section-47">second_order_conservative</h3>
+<pre><code class="language-python">klimapy.Interpolation.second_order_conservative(data, target_grid, *, source_grid=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L228">源码</a></p>
+<h3 id="section-48">patch</h3>
+<pre><code class="language-python">klimapy.Interpolation.patch(data, target_grid)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Interpolation/spatial_interpolation.py#L232">源码</a></p>
+<h2 id="section-49">降水变率</h2>
+<h3 id="section-50">get_precip_var</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.get_precip_var(ds)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L9">源码</a></p>
+<h3 id="section-51">compute_precip_variability</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.compute_precip_variability(ds, baseline_years=None, *, spatial_chunk_size=32, min_valid_fraction=0.9)
+</code></pre>
+<p>Rust seasonal anomaly, detrending and annual population standard deviation.</p>
+<p>Missing whole dates are inserted as NaN before computing temporal trends.
+Use read_field(..., indexers=...) to load a bounded spatial region from disk.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L35">源码</a></p>
+<h3 id="section-52">compute_precip_variability_split</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.compute_precip_variability_split(ds, split_year=2015, *, spatial_chunk_size=32, min_valid_fraction=0.9)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L105">源码</a></p>
+<h3 id="section-53">annual_precip_variability_trend</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.annual_precip_variability_trend(annual_var, years, baseline_years=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L120">源码</a></p>
+<h3 id="section-54">calc_annual_precip_variability</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.calc_annual_precip_variability(data, years)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L135">源码</a></p>
+<h3 id="section-55">remove_annual_cycle</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.remove_annual_cycle(precip, years, doy, baseline_years=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L139">源码</a></p>
+<h3 id="section-56">remove_linear_trend</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.remove_linear_trend(data)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L155">源码</a></p>
+<h3 id="section-57">calc_precip_variability</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.calc_precip_variability(data)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L159">源码</a></p>
+<h3 id="section-58">calc_variability_trend</h3>
+<pre><code class="language-python">klimapy.PrecipitationVariability.calc_variability_trend(data, years, doy=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/PrecipitationVariability/precip_variability_netcdf.py#L165">源码</a></p>
+<h2 id="section-59">空间统计</h2>
+<h3 id="section-60">calculate_spatial_mean</h3>
+<pre><code class="language-python">klimapy.Supporting_Tools.calculate_spatial_mean(data_array, method='arithmetic', include_zeros=False, shp=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Supporting_Tools/CSM.py#L26">源码</a></p>
+<h2 id="section-61">栅格输出</h2>
+<h3 id="section-62">nc_to_tiff</h3>
+<pre><code class="language-python">klimapy.Supporting_Tools.nc_to_tiff(nc_file, output_dir, clip_extent=None, variable=None, start_year=None, end_year=None)
+</code></pre>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/Supporting_Tools/NCtoTIFF.py#L12">源码</a></p>
+<h2 id="section-63">批处理</h2>
+<h3 id="section-64">process_models</h3>
+<pre><code class="language-python">klimapy.process_models(jobs, *, output_dir, strict=False, bc_options=None, sd_options=None)
+</code></pre>
+<p>Run mappings of BC arguments; collect failures rather than silently skipping.</p>
+<p>Each job needs obs_path, gcm_hist_path, gcm_fut_path, model_name,
+ref_start_year, ref_end_year. Stages always run in strict mode internally.</p>
+<p><a href="https://github.com/michalrees/Klimapy/blob/main/src/klimapy/workflows/batch.py#L9">源码</a></p>
+<h2 id="section-65">动态生成的 ETCCDI 指标</h2>
+<p>这些函数通过工厂创建，不会出现在静态 def 列表中。完整口径与返回频率见 <a href="etccdi.html">ETCCDI</a>。</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>函数与签名</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>固定阈值降水</td>
+<td>R10mm / R20mm / R25mm / R50mm 的 <code>_precipitation</code>、<code>_days</code>、<code>_intensity</code>、<code>_ratio</code>：<code>metric(pr, *, min_valid_fraction=0.9)</code></td>
+</tr>
+<tr>
+<td>百分位降水</td>
+<td>R90mm / R95mm / R99mm 的相同四种后缀：<code>metric(pr, baseline_pr=None, baseline_years=None, *, min_valid_fraction=0.9)</code></td>
+</tr>
+<tr>
+<td>温度阈值与极值</td>
+<td>FD(tn)、SU(tx)、ID(tx)、TR(tn)、TXx(tx)、TNx(tn)、TXn(tx)、TNn(tn)，带 <code>min_valid_fraction=0.9</code></td>
+</tr>
+</tbody>
+</table>
+<p>这里的 <code>metric</code> 代表所选函数名称，不是额外导出的函数。百分位降水必须显式提供基准期；温度百分位函数的 bootstrap 默认行为见其独立签名及指南。</p>
+</article><nav class="pager" aria-label="章节翻页"><a href="geotiff.html"><small>上一章</small>GeoTIFF 导出 ←</a><a href="migration.html"><small>下一章</small>迁移与计算口径 →</a></nav><footer>MIT License · <a href="https://github.com/michalrees/Klimapy/issues">报告文档问题</a> · <a href="https://pypi.org/project/klimapy/">PyPI</a></footer></main><aside class="toc"><p>本页目录</p><a class="level-2" href="#section-2">数据模型</a><a class="level-3" href="#section-3">TimeAxis</a><a class="level-3" href="#section-4">Field</a><a class="level-3" href="#section-5">read_field</a><a class="level-2" href="#section-6">原生文件</a><a class="level-3" href="#section-7">Dataset</a><a class="level-3" href="#section-8">open_dataset</a><a class="level-2" href="#section-9">线性代数</a><a class="level-3" href="#section-10">svd</a><a class="level-3" href="#section-11">EOFResult</a><a class="level-3" href="#section-12">eof</a><a class="level-2" href="#section-13">ETCCDI</a><a class="level-3" href="#section-14">check_data</a><a class="level-3" href="#section-15">check_temperature_data</a><a class="level-3" href="#section-16">select_baseline_period</a><a class="level-3" href="#section-17">PRCPTOT</a><a class="level-3" href="#section-18">R1mm_days</a><a class="level-3" href="#section-19">SDII</a><a class="level-3" href="#section-20">RXnday</a><a class="level-3" href="#section-21">RX1DAY</a><a class="level-3" href="#section-22">RX5DAY</a><a class="level-3" href="#section-23">CDD</a><a class="level-3" href="#section-24">CWD</a><a class="level-3" href="#section-25">Rnnmm</a><a class="level-3" href="#section-26">TN10p</a><a class="level-3" href="#section-27">TX10p</a><a class="level-3" href="#section-28">TN90p</a><a class="level-3" href="#section-29">TX90p</a><a class="level-3" href="#section-30">WSDI</a><a class="level-3" href="#section-31">CSDI</a><a class="level-3" href="#section-32">GSL</a><a class="level-3" href="#section-33">DTR</a><a class="level-3" href="#section-34">compute_indices</a><a class="level-2" href="#section-35">偏差校正</a><a class="level-3" href="#section-36">BC</a><a class="level-3" href="#section-37">close_result</a><a class="level-2" href="#section-38">降尺度</a><a class="level-3" href="#section-39">SD</a><a class="level-2" href="#section-40">插值</a><a class="level-3" href="#section-41">Regridder</a><a class="level-3" href="#section-42">interpolate</a><a class="level-3" href="#section-43">no_interpolation</a><a class="level-3" href="#section-44">bilinear</a><a class="level-3" href="#section-45">nearest_neighbor</a><a class="level-3" href="#section-46">first_order_conservative</a><a class="level-3" href="#section-47">second_order_conservative</a><a class="level-3" href="#section-48">patch</a><a class="level-2" href="#section-49">降水变率</a><a class="level-3" href="#section-50">get_precip_var</a><a class="level-3" href="#section-51">compute_precip_variability</a><a class="level-3" href="#section-52">compute_precip_variability_split</a><a class="level-3" href="#section-53">annual_precip_variability_trend</a><a class="level-3" href="#section-54">calc_annual_precip_variability</a><a class="level-3" href="#section-55">remove_annual_cycle</a><a class="level-3" href="#section-56">remove_linear_trend</a><a class="level-3" href="#section-57">calc_precip_variability</a><a class="level-3" href="#section-58">calc_variability_trend</a><a class="level-2" href="#section-59">空间统计</a><a class="level-3" href="#section-60">calculate_spatial_mean</a><a class="level-2" href="#section-61">栅格输出</a><a class="level-3" href="#section-62">nc_to_tiff</a><a class="level-2" href="#section-63">批处理</a><a class="level-3" href="#section-64">process_models</a><a class="level-2" href="#section-65">动态生成的 ETCCDI 指标</a></aside></div><div id="status" role="status" aria-live="polite"></div><script src="manual.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script></body></html>

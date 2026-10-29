@@ -1,10 +1,11 @@
-"""Optional dependency-free Rust kernels, built as a platform native library."""
+"""Build the required Rust climate engine as a platform native library."""
 
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
@@ -24,20 +25,39 @@ class RustBuild(build_ext):
         )
 
     def build_extension(self, ext):
+        self._build_rust(ext)
+
+    def copy_extensions_to_source(self):
+        build_py = self.get_finalized_command("build_py")
+        for ext in self.extensions:
+            filename = self.get_ext_filename(ext.name)
+            package = ext.name.rsplit(".", 1)[0]
+            destination = Path(build_py.get_package_dir(package)) / Path(filename).name
+            self._atomic_copy(Path(self.build_lib) / filename, destination)
+
+    @staticmethod
+    def _atomic_copy(source, destination):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, staging = tempfile.mkstemp(
+            prefix=".native-", dir=destination.parent
+        )
+        os.close(descriptor)
         try:
-            self._build_rust(ext)
-        except (CompileError, OSError, subprocess.CalledProcessError) as exc:
-            if not ext.optional:
-                raise
-            self.warn("Rust extension unavailable; using Python backend: " + str(exc))
+            shutil.copy2(source, staging)
+            os.replace(staging, destination)
+        finally:
+            if os.path.exists(staging):
+                os.unlink(staging)
 
     def _build_rust(self, ext):
         if os.environ.get("KLIMAPY_BUILD_RUST", "auto") == "0":
-            return
+            raise CompileError(
+                "Rust engine is required; KLIMAPY_BUILD_RUST=0 is unsupported"
+            )
         cargo = shutil.which("cargo")
         if cargo is None:
             raise CompileError(
-                "Rust build requires cargo; use KLIMAPY_BUILD_RUST=0 for Python only"
+                "Rust build requires cargo; install Rust or use a native wheel"
             )
         target = Path(self.build_temp).resolve() / "rust"
         try:
@@ -66,7 +86,8 @@ class RustBuild(build_ext):
         )
         destination = Path(self.get_ext_fullpath(ext.name))
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(target / "release" / filename, destination)
+        # A running process may have the old library mapped: replace, never truncate.
+        self._atomic_copy(target / "release" / filename, destination)
 
 
 class NativeWheel(bdist_wheel):
@@ -78,17 +99,8 @@ class NativeWheel(bdist_wheel):
         )
 
 
-extensions = (
-    []
-    if os.environ.get("KLIMAPY_BUILD_RUST") == "0"
-    else [
-        Extension(
-            "klimapy._backends._native_core",
-            sources=[],
-            optional=os.environ.get("KLIMAPY_BUILD_RUST") != "1",
-        )
-    ]
-)
+extensions = [Extension("klimapy._backends._native_core", sources=[], optional=False)]
+
 setup(
     ext_modules=extensions,
     cmdclass={"build_ext": RustBuild, "bdist_wheel": NativeWheel},

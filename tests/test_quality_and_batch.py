@@ -274,7 +274,7 @@ class ProcessingTests(TestCase):
                 ) as writer:
                     writer.write(0, a.values[:2])
                     writer.write(2, a.values[2:])
-            with xr.open_dataset(path, engine="scipy") as result:
+            with xr.open_dataset(path) as result:
                 np.testing.assert_array_equal(result.pr.values, a.values)
                 np.testing.assert_array_equal(result.time.values, a.time.values)
 

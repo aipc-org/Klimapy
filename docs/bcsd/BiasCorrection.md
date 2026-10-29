@@ -51,8 +51,8 @@ from klimapy.BCSD.BiasCorrection import BC
 
 | 字段 | 内容 |
 | --- | --- |
-| corrected_hist_pr | 校正后的历史期 DataArray |
-| corrected_fut_pr | 校正后的未来期 DataArray |
+| corrected_hist_pr | 校正后的历史期 Field |
+| corrected_fut_pr | 校正后的未来期 Field |
 | calendar_type / max_doy | 日历类型及年内日数 |
 | gcm_time_coord / gcm_lat_coord / gcm_lon_coord | 模式坐标名称 |
 | original_hist_path / original_fut_path | 原始模式文件路径，仅供追踪来源 |
@@ -65,7 +65,7 @@ BC 的计算代码位于 `src/klimapy/BCSD/BiasCorrection.py`，与 SD 分开维
 日历、单位转换和诊断工具放在 `_core/common.py`。
 
 当前算法保持原实现：先将观测聚合到模式网格，再按日序滑动窗口构造样本，
-使用 `UnivariateSpline` 拟合分位数映射；超出拟合区间的数值使用边界夹持。
+使用纯 Rust FITPACK 三次平滑样条（对应 UnivariateSpline 的 knot workspace 策略）拟合分位数映射；超出拟合区间的数值使用边界夹持。
 
 ## 日期匹配、缓存和内存
 
@@ -82,3 +82,7 @@ BC 的计算代码位于 `src/klimapy/BCSD/BiasCorrection.py`，与 SD 分开维
 使用磁盘映射时，消费结果后可调用 `klipy.BC.close_result(bc_result, remove_work_files=True)`，
 关闭并删除该结果自己的 backing 文件；此前提取的数组视图在关闭后不得继续使用。
 `process_models` 和一体化 BCSD 入口会在 SD 结束后自动释放这些中间文件。
+
+原生输入也可直接使用 Field。样条若返回 FITPACK 近似拟合状态 2/3，会显式警告，
+并计入 `diagnostics.approximate_functions`；不把未达到平滑目标伪装成精确拟合。
+其他拟合错误会使严格流程失败。关闭 `close_result` 后不要再访问原 memmap 视图。

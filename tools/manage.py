@@ -1,6 +1,7 @@
 """Portable developer commands; run `python tools/manage.py --help`."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shutil
@@ -25,20 +26,50 @@ def run(command, *, installed=False, extra_env=None):
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
-def test(*, installed=False, require_rust=False):
-    if require_rust:
-        run(
-            [
-                sys.executable,
-                "-c",
-                'from klimapy import backend_info; assert backend_info()["rust_available"], "Rust backend required"',
-            ],
-            installed=installed,
-        )
-    run(
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
-        installed=installed,
+def test_python():
+    if (
+        Path(sys.prefix).name == "Test"
+        and (Path(sys.prefix) / "conda-meta/history").is_file()
+    ):
+        return sys.executable
+    conda = os.environ.get("CONDA_EXE") or shutil.which("conda")
+    if not conda and Path("/opt/miniconda3/bin/conda").exists():
+        conda = "/opt/miniconda3/bin/conda"
+    if conda:
+        environments = json.loads(
+            subprocess.check_output([conda, "env", "list", "--json"], text=True)
+        )["envs"]
+        for prefix in environments:
+            path = Path(prefix)
+            if path.name == "Test":
+                executable = path / ("python.exe" if os.name == "nt" else "bin/python")
+                if executable.is_file():
+                    return str(executable)
+    raise RuntimeError(
+        "Create the dedicated Test environment first: conda env create -f environment.yml"
     )
+
+
+def test(*, installed=False, require_rust=False):
+    # The native engine is mandatory; retain require_rust as a compatible CLI flag.
+    command = [test_python(), str(ROOT / "tools/run_native_tests.py")]
+    if installed:
+        command.append("--installed")
+    run(
+        command,
+        installed=installed,
+        extra_env={
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPATH": "" if installed else str(ROOT / "src"),
+        },
+    )
+
+
+def compare(*, installed=False):
+    command = [test_python(), str(ROOT / "tools/compare_cn05.py")]
+    if installed:
+        command.append("--installed")
+    run(command, installed=installed)
 
 
 def lint(*, rust=False):
@@ -136,7 +167,7 @@ def main(argv=None):
     command = sub.add_parser("lint")
     command.add_argument("--rust", action="store_true")
     command = sub.add_parser("build")
-    command.add_argument("--rust", choices=("auto", "on", "off"), default="off")
+    command.add_argument("--rust", choices=("on",), default="on")
     command.add_argument("--outdir", default="dist")
     command.add_argument(
         "--no-isolation",
@@ -152,6 +183,10 @@ def main(argv=None):
     command.add_argument(
         "--native", action="store_true", help="Also remove the local native library"
     )
+    command = sub.add_parser(
+        "compare", help="CN05.1 native Test versus independent Test1 references"
+    )
+    command.add_argument("--installed", action="store_true")
     command = sub.add_parser("benchmark")
     command.add_argument("--repeats", type=int, default=3)
     command.add_argument("--output", default="benchmarks/results/latest.json")
@@ -160,34 +195,37 @@ def main(argv=None):
         lint(rust=args.rust)
     if args.command in ("test", "check"):
         test(installed=args.installed, require_rust=args.require_rust)
+        if args.command == "check":
+            compare(installed=args.installed)
     elif args.command == "build":
         command = [sys.executable, "-m", "build", "--outdir", args.outdir]
         if args.no_isolation:
             command.append("--no-isolation")
         run(
             command,
-            extra_env={
-                "KLIMAPY_BUILD_RUST": {"auto": "auto", "on": "1", "off": "0"}[args.rust]
-            },
+            extra_env={"KLIMAPY_BUILD_RUST": "1"},
         )
     elif args.command == "clean":
         clean(apply=args.apply, native=args.native)
+    elif args.command == "compare":
+        compare(installed=args.installed)
     elif args.command == "benchmark":
         run(
             [
-                sys.executable,
+                test_python(),
                 "benchmarks/run_rust.py",
                 "--repeats",
                 str(args.repeats),
                 "--output",
                 args.output,
-            ]
+            ],
+            extra_env={"PYTHONNOUSERSITE": "1", "PYTHONPATH": str(ROOT / "src")},
         )
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+    except (subprocess.CalledProcessError, FileNotFoundError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)

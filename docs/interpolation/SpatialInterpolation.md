@@ -1,6 +1,6 @@
 # 气候数据空间插值
 
-`klimapy.Interpolation` 接受含一维 `lat`、`lon` 坐标的 `xarray.DataArray`。
+`klimapy.Interpolation` 接受含一维 `lat`、`lon` 坐标的 `klimapy.native.Field`。
 时间、层次等其他维度及变量单位保留，数据按标量场处理。
 
 | 函数 | method | 用途 |
@@ -25,8 +25,8 @@ result = interp.patch(data, target)
 original = interp.no_interpolation(data)
 
 # 多个场共用同一网格权重；每次输入坐标必须与初始化时完全相同。
-regridder = interp.Regridder(data, target, method='bilinear')
-result = regridder(data)
+with interp.Regridder(data, target, method='bilinear') as regridder:
+    result = regridder(data)
 ```
 
 ## 守恒插值与单元边界
@@ -69,3 +69,5 @@ result = interp.second_order_conservative(data, target, source_grid=source)
 本库 `patch` 是局部二次拟合，不是 ESMF 的多 Patch 恢复算法，不承诺相同权重或结果。
 二阶守恒也是球面矩形网格上的本地实现，不宣称与 ESMF 数值完全一致。
 方法性质可参见 [ESMF 重网格说明](https://earthsystemmodeling.org/regrid/)。
+
+权重构建与求值均在 Rust 执行，Regridder 应使用上下文或显式 close；关闭后不可再调用。
