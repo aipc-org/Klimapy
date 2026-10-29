@@ -544,16 +544,10 @@ pub unsafe extern "C" fn kl_nc_def_var(
         ids.as_ptr(),
         &mut var
     ));
-    if kind == 5 || kind == 6 {
-        check!((a.put_att)(
-            id,
-            var,
-            c"_FillValue".as_ptr(),
-            kind,
-            1,
-            &f64::NAN
-        ));
-    }
+    // Define the fill explicitly for every writable type: older NetCDF/HDF5
+    // combinations may otherwise leave unwritten compressed int16 cells as 0.
+    let fill = if kind == 3 { -32767.0 } else { f64::NAN };
+    check!((a.put_att)(id, var, c"_FillValue".as_ptr(), kind, 1, &fill));
     if compression > 0 {
         check!((a.deflate)(id, var, 1, 1, compression));
     }
