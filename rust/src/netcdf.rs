@@ -60,6 +60,7 @@ api! {
     get_att: unsafe extern "C" fn(c_int,c_int,*const c_char,*mut f64)->c_int => "nc_get_att_double",
     get: unsafe extern "C" fn(c_int,c_int,*const usize,*const usize,*mut f64)->c_int => "nc_get_vara_double",
     fill: unsafe extern "C" fn(c_int,c_int,*mut c_int,*mut c_void)->c_int => "nc_inq_var_fill",
+    def_fill: unsafe extern "C" fn(c_int,c_int,c_int,*const c_void)->c_int => "nc_def_var_fill",
     def_dim: unsafe extern "C" fn(c_int,*const c_char,usize,*mut c_int)->c_int => "nc_def_dim",
     dimid: unsafe extern "C" fn(c_int,*const c_char,*mut c_int)->c_int => "nc_inq_dimid",
     def_var: unsafe extern "C" fn(c_int,*const c_char,c_int,c_int,*const c_int,*mut c_int)->c_int => "nc_def_var",
@@ -70,6 +71,22 @@ api! {
     redef: unsafe extern "C" fn(c_int)->c_int => "nc_redef",
     put: unsafe extern "C" fn(c_int,c_int,*const usize,*const usize,*const f64)->c_int => "nc_put_vara_double",
     error: unsafe extern "C" fn(c_int)->*const c_char => "nc_strerror",
+}
+// Use the dedicated typed API so the HDF5 storage fill and the metadata agree,
+// including on older runtimes where updating only the attribute is insufficient.
+unsafe fn define_fill(a: &Api, id: i32, var: i32, kind: i32, value: f64) -> i32 {
+    match kind {
+        3 => {
+            if !value.is_finite() || value.fract() != 0.0 || !(-32768.0..=32767.0).contains(&value)
+            {
+                return INVALID;
+            }
+            (a.def_fill)(id, var, 0, (&(value as i16) as *const i16).cast())
+        }
+        5 => (a.def_fill)(id, var, 0, (&(value as f32) as *const f32).cast()),
+        6 => (a.def_fill)(id, var, 0, (&value as *const f64).cast()),
+        _ => INVALID,
+    }
 }
 static API: OnceLock<Api> = OnceLock::new();
 static LOCK: Mutex<()> = Mutex::new(());
@@ -547,7 +564,7 @@ pub unsafe extern "C" fn kl_nc_def_var(
     // Define the fill explicitly for every writable type: older NetCDF/HDF5
     // combinations may otherwise leave unwritten compressed int16 cells as 0.
     let fill = if kind == 3 { -32767.0 } else { f64::NAN };
-    check!((a.put_att)(id, var, c"_FillValue".as_ptr(), kind, 1, &fill));
+    check!(define_fill(a, id, var, kind, fill));
     if compression > 0 {
         check!((a.deflate)(id, var, 1, 1, compression));
     }
@@ -587,7 +604,10 @@ pub unsafe extern "C" fn kl_nc_put_attribute(
                 std::ptr::null_mut(),
                 std::ptr::null_mut()
             ));
-            k
+            if length != 1 {
+                return INVALID;
+            }
+            return define_fill(a, g, v, k, *values.cast::<f64>());
         } else {
             6
         };
