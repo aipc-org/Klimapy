@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">Klimapy — 面向气候数据的 Python 工具包</title>
+  <desc id="description">Klimapy 品牌标识与气候等值线图案。</desc>
+  <rect width="1280" height="640" fill="#faf9f6"/>
+  <g fill="none" stroke="#e8e0d7" stroke-width="2">
+    <path d="M846-60c60 40 95 92 96 151 1 54-41 88-38 139 4 58 61 85 60 146-1 67-70 119-144 165"/>
+    <path d="M910-54c58 38 86 83 84 134-2 51-38 86-35 132 4 53 53 79 53 137 0 65-57 111-120 150"/>
+    <path d="M977-47c51 34 73 74 71 119-2 48-33 79-31 122 3 48 45 74 44 128-1 58-43 100-91 135"/>
+    <path d="M1045-37c43 29 60 62 58 103-2 43-27 71-25 108 2 44 35 67 34 115-1 52-31 89-66 119"/>
+    <path d="M1113-22c35 24 48 51 46 86-2 37-21 61-19 94 2 37 26 57 25 100-1 45-19 76-42 101"/>
+  </g>
+  <g fill="none" stroke="#d7c8b9" stroke-width="1.5" opacity=".8">
+    <path d="M1194 151c28 19 43 41 42 65-2 24-19 41-18 65 1 23 19 38 18 62-1 28-17 49-41 67"/>
+    <path d="M1224 138c25 17 37 36 36 56-1 21-16 36-15 57 1 20 15 33 14 54-1 23-13 41-32 56"/>
+    <path d="M1250 128c19 13 28 27 27 42-1 17-11 28-10 45 1 15 11 25 10 41-1 18-9 31-22 43"/>
+  </g>
+  <g transform="translate(132 150) scale(2.2)">
+    <g fill="none" stroke="#1d1d1b" stroke-linecap="round">
+      <path d="M62 8a52 52 0 1 0 49 34" stroke-width="2.8"/>
+      <path d="M62 19a41 41 0 1 0 38 27" stroke-width="2.5"/>
+      <path d="M62 30a30 30 0 1 0 27 21" stroke-width="2.2"/>
+    </g>
+    <path d="M55 38v46M55 62l27-23M55 62l27 23" fill="none" stroke="#d97757" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5"/>
+    <text x="146" y="72" fill="#1d1d1b" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="46" font-weight="700" letter-spacing="-1.5">Klimapy</text>
+    <text x="149" y="99" fill="#65635e" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="10.5" font-weight="600" letter-spacing="2.1">CLIMATE DATA · PYTHON</text>
+  </g>
+  <path d="M146 460h58" stroke="#d97757" stroke-linecap="round" stroke-width="3"/>
+  <text x="146" y="509" fill="#383632" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" font-weight="500">面向气候数据的 Python 工具包</text>
+  <text x="148" y="555" fill="#77736d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12" font-weight="600" letter-spacing="2.4">ETCCDI · BCSD · PRECIPITATION · STATISTICS</text>
+</svg>
