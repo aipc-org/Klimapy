@@ -28,6 +28,8 @@ jobs:
           sudo apt-get install -y libnetcdf-dev
           rustup toolchain install stable --profile minimal
           rustup default stable
+      - name: Verify vendored source inputs
+        run: python tools/check_vendor.py --git-index
       - name: Install only Klimapy core
         run: python -m pip install --no-deps --no-build-isolation .
       - name: Verify native package inside Test
