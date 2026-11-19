@@ -25,7 +25,7 @@ jobs:
       - name: Prepare native runtime and Rust
         run: |
           sudo apt-get update
-          sudo apt-get install -y libnetcdf-dev
+          sudo apt-get install -y libnetcdf-dev libproj-dev proj-data
           rustup toolchain install stable --profile minimal
           rustup default stable
       - name: Verify vendored source inputs

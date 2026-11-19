@@ -1,6 +1,14 @@
 # Changelog
 
-## 1.3.0 — 2026-11-19
+## 1.3.1 — 2026-11-19
+
+- Include upstream Cargo source directories omitted by build-directory ignore rules.
+- Verify every vendored file against its Cargo checksum and require it in Git before CI builds.
+- Declare the Windows PE dependency scanner in the isolated build environment.
+- Supply native PROJ in source-build CI and isolate bundled C++ runtimes for manylinux compatibility.
+- Includes the native workflow and float32 optimization changes listed below.
+
+## 1.3.0 — 2026-11-19（构建未通过，未上传 PyPI）
 
 - 多文件集合：日期排序、兼容性检查、分块读取与合并。
 - 日/月资料的月季年统计、月长加权及完整周期覆盖率。
