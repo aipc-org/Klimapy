@@ -2,8 +2,25 @@
 
 from importlib import import_module
 
-_MODULES = {"interpolation", "linalg", "spatial", "climatology"}
+_MODULES = {
+    "interpolation",
+    "linalg",
+    "spatial",
+    "climatology",
+    "temporal",
+    "evaluation",
+    "drought",
+    "ensemble",
+    "events",
+}
 _FUNCTIONS = {
+    "event_catalog": "events",
+    "compound_events": "events",
+    "ensemble_statistics": "ensemble",
+    "spi": "drought",
+    "spei": "drought",
+    "aggregate": "temporal",
+    "evaluate": "evaluation",
     "svd": "linalg",
     "eof": "linalg",
     "EOFResult": "linalg",

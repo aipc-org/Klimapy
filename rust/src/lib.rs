@@ -170,7 +170,7 @@ mod netcdf;
 /// Version the ABI so stale local binaries cannot silently run different semantics.
 #[no_mangle]
 pub extern "C" fn klimapy_abi_version() -> u32 {
-    5
+    10
 }
 mod linalg;
 mod variability;
@@ -185,3 +185,15 @@ mod correction;
 mod spatial_tools;
 
 mod climatology;
+
+mod shapes;
+
+mod series;
+
+mod drought;
+
+mod ensemble;
+
+mod events;
+
+mod inference;

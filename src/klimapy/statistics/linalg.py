@@ -26,6 +26,10 @@ def _settings(tol, max_sweeps):
         or max_sweeps < 1
     ):
         raise ValueError("max_sweeps must be a positive integer")
+    if tol != 1e-12 or max_sweeps != 100:
+        raise ValueError(
+            "faer manages convergence internally; custom tol/max_sweeps are unsupported"
+        )
 
 
 def _modes(value, maximum, allow_zero=False):
@@ -43,9 +47,9 @@ def _modes(value, maximum, allow_zero=False):
 
 def _check(code):
     if code == 2:
-        raise RuntimeError(
-            "Rust Jacobi SVD did not converge; increase max_sweeps or inspect conditioning"
-        )
+        raise RuntimeError("Rust faer SVD did not converge; inspect conditioning")
+    if code == 6:
+        raise RuntimeError("Rust faer SVD failed internally")
     if code == 3:
         raise ValueError("SVD/EOF numerical overflow: rescale the input data")
     if code == 4:
@@ -63,8 +67,9 @@ def _check(code):
 def svd(data, *, n_modes=None, tol=1e-12, max_sweeps=100):
     """Return U, s, Vt with data ~= (U * s) @ Vt, compact shapes only.
 
-    Rust uses scaled one-sided Jacobi rotations without forming a covariance
-    matrix. n_modes truncates a complete dense factorization; it is not a
+    Rust uses faer thin SVD without forming a covariance matrix.
+    tol=1e-12 and max_sweeps=100 remain reserved compatibility defaults;
+    custom values are rejected because faer manages its own convergence. n_modes truncates a complete dense factorization; it is not a
     randomized or out-of-core solver. Mode signs are fixed deterministically,
     while repeated singular subspaces remain non-unique.
     """

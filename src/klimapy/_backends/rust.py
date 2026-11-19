@@ -1,11 +1,11 @@
 """Required Rust engine. Python owns array metadata, never a fallback algorithm."""
 
 import ctypes as ct
-from functools import lru_cache
 import os
-from pathlib import Path
-import weakref
 import threading
+import weakref
+from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
@@ -25,7 +25,7 @@ def _load():
         try:
             lib = ct.CDLL(str(path))
             lib.klimapy_abi_version.restype = ct.c_uint32
-            if lib.klimapy_abi_version() != 5:
+            if lib.klimapy_abi_version() != 10:
                 continue
             signatures = {
                 "kl_svd": [
@@ -171,7 +171,7 @@ def backend_info():
     return {
         "requested": os.environ.get("KLIMAPY_BACKEND", "rust"),
         "engine": "rust",
-        "abi_version": 5,
+        "abi_version": 10,
         "rust_available": _load() is not None,
     }
 
@@ -341,6 +341,8 @@ class Downscaler:
         minimum=1e-4,
         low=0.1,
         high=10.0,
+        additive=False,
+        nonnegative=True,
     ):
         self.coarse = np.ascontiguousarray(coarse_climate, dtype=np.float64)
         # Retain float64 memmaps without copying; other layouts convert once.
@@ -365,6 +367,7 @@ class Downscaler:
             source_lat, source_lon, target_lat, target_lon, bilinear=True
         )
         self.limits = (minimum, low, high)
+        self.additive, self.nonnegative = bool(additive), bool(nonnegative)
 
     def apply(self, values, days):
         with self.plan._lock:
@@ -385,6 +388,34 @@ class Downscaler:
                 )
             indices = np.ascontiguousarray(days, dtype=np.uintp)
             out = np.empty((len(values),) + self.plan.target_shape, dtype=np.float64)
+            if self.additive:
+                fn = _library().temperature_downscale_block
+                fn.argtypes = [
+                    ct.c_void_p,
+                    _DOUBLE,
+                    _DOUBLE,
+                    _DOUBLE,
+                    _SIZE_PTR,
+                    _DOUBLE,
+                    _SIZE,
+                    _SIZE,
+                    ct.c_bool,
+                ]
+                fn.restype = ct.c_int
+                _check(
+                    fn(
+                        self.plan._handle,
+                        _ptr(values),
+                        _ptr(self.coarse),
+                        _ptr(self.fine),
+                        _ptr(indices, _SIZE_PTR),
+                        _ptr(out),
+                        len(values),
+                        len(self.coarse),
+                        self.nonnegative,
+                    )
+                )
+                return out.astype(np.float32)
             _check(
                 _library().downscale_block(
                     self.plan._handle,
@@ -411,7 +442,20 @@ class Downscaler:
 
 
 def climate_accumulate(values, days, sums, counts):
-    _, values = _cube(values)
+    original = np.asarray(values)
+    library = _library()
+    fast = getattr(library, "climate_accumulate_f32", None) if original.dtype == np.float32 else None
+    if fast is not None:
+        if original.ndim != 3:
+            raise ValueError("Expected a numeric (time, lat, lon) array")
+        values = np.require(original, dtype=np.float32, requirements=["C", "A"])
+        pointer = ct.POINTER(ct.c_float)
+        fast.argtypes = [pointer, ct.POINTER(ct.c_ssize_t), _DOUBLE, _INT_PTR, _SIZE, _SIZE, _SIZE]
+        fast.restype = ct.c_int
+    else:
+        _, values = _cube(original)
+        fast = library.climate_accumulate
+        pointer = _DOUBLE
     days = np.asarray(days)
     if (
         sums.dtype != np.float64
@@ -432,8 +476,8 @@ def climate_accumulate(values, days, sums, counts):
         )
     indices = np.ascontiguousarray(days, dtype=np.intp)
     _check(
-        _library().climate_accumulate(
-            _ptr(values),
+        fast(
+            _ptr(values, pointer),
             _ptr(indices, ct.POINTER(ct.c_ssize_t)),
             _ptr(sums),
             _ptr(counts, _INT_PTR),

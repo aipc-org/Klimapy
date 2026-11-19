@@ -54,32 +54,6 @@ pub unsafe extern "C" fn kl_spatial_mean(
     *output = if weight > 0.0 { sum / weight } else { f64::NAN };
     0
 }
-fn inside(x: f64, y: f64, points: &[f64]) -> i32 {
-    let n = points.len() / 2;
-    let mut hit = false;
-    for i in 0..n {
-        let j = (i + 1) % n;
-        let (a, b, c, d) = (
-            points[2 * i],
-            points[2 * i + 1],
-            points[2 * j],
-            points[2 * j + 1],
-        );
-        let cross = (x - a) * (d - b) - (y - b) * (c - a);
-        if cross.abs() <= 1e-12 * (1.0 + (c - a).abs() + (d - b).abs())
-            && x >= a.min(c) - 1e-12
-            && x <= a.max(c) + 1e-12
-            && y >= b.min(d) - 1e-12
-            && y <= b.max(d) + 1e-12
-        {
-            return 2;
-        }
-        if (b > y) != (d > y) && x < (c - a) * (y - b) / (d - b) + a {
-            hit = !hit;
-        }
-    }
-    i32::from(hit)
-}
 /// # Safety
 /// lat=ny,lon=nx; points=2*npoints; rings=nrings+1; polygons=npoly+1; out=ny*nx.
 #[no_mangle]
@@ -126,37 +100,38 @@ pub unsafe extern "C" fn kl_polygon_mask(
     {
         return 1;
     }
+    use geo::{BoundingRect, Intersects, LineString, Point, Polygon, Validation};
+    let line = |h: usize| {
+        LineString::from(
+            xy[2 * r[h]..2 * r[h + 1]]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|v| (v[0], v[1]))
+                .collect::<Vec<_>>(),
+        )
+    };
+    let mut shapes = Vec::with_capacity(npoly);
+    for k in 0..npoly {
+        let shape = Polygon::new(line(p[k]), (p[k] + 1..p[k + 1]).map(line).collect());
+        if !shape.is_valid() {
+            return 1;
+        }
+        let Some(bounds) = shape.bounding_rect() else {
+            return 1;
+        };
+        shapes.push((bounds, shape));
+    }
     for (j, &yy) in y.iter().enumerate() {
         for (i, &xx) in x.iter().enumerate() {
-            let mut included = false;
-            for k in 0..npoly {
-                let outer = p[k];
-                let state = inside(xx, yy, &xy[2 * r[outer]..2 * r[outer + 1]]);
-                if state == 2 {
-                    included = true;
-                    break;
-                }
-                if state == 0 {
-                    continue;
-                }
-                let mut hole = false;
-                let mut boundary = false;
-                for h in outer + 1..p[k + 1] {
-                    let s = inside(xx, yy, &xy[2 * r[h]..2 * r[h + 1]]);
-                    if s == 2 {
-                        boundary = true;
-                        break;
-                    }
-                    if s == 1 {
-                        hole = true;
-                    }
-                }
-                if boundary || !hole {
-                    included = true;
-                    break;
-                }
-            }
-            out[j * nx + i] = u8::from(included);
+            let point = Point::new(xx, yy);
+            out[j * nx + i] = u8::from(shapes.iter().any(|(bounds, shape)| {
+                xx >= bounds.min().x
+                    && xx <= bounds.max().x
+                    && yy >= bounds.min().y
+                    && yy <= bounds.max().y
+                    && shape.intersects(&point)
+            }));
         }
     }
     0
@@ -181,7 +156,7 @@ fn tag(
         a[..data.len()].copy_from_slice(data);
         ifd.extend(a);
     } else {
-        while (base + extra.len()) % 8 != 0 {
+        while !(base + extra.len()).is_multiple_of(8) {
             extra.push(0);
         }
         ifd.extend(((base + extra.len()) as u32).to_le_bytes());

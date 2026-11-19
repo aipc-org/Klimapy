@@ -1,18 +1,25 @@
-"""Polygon metadata input; projected vector files use optional native GDAL C API."""
+"""Rust Shapefile/geo geometry, direct PROJ transforms, GDAL for other vector formats."""
 
 import ctypes as ct
-from ctypes.util import find_library
-from functools import lru_cache
 import json
 import os
+from ctypes.util import find_library
+from functools import lru_cache
 from pathlib import Path
+
 import numpy as np
-from .._backends.rust import _library, _ptr, _DOUBLE, _SIZE, _SIZE_PTR, _BYTE, _check
+
+from .._backends.rust import _BYTE, _DOUBLE, _SIZE, _SIZE_PTR, _check, _library, _ptr
+from .._native_runtime import bundled_data, bundled_library, configure_gdal
 
 
 @lru_cache(None)
 def _gdal():
-    path = os.environ.get("KLIMAPY_GDAL_LIBRARY") or find_library("gdal")
+    path = (
+        os.environ.get("KLIMAPY_GDAL_LIBRARY")
+        or bundled_library("gdal")
+        or find_library("gdal")
+    )
     if not path:
         raise RuntimeError(
             "Native GDAL required for vector files; provide WGS84 GeoJSON or set KLIMAPY_GDAL_LIBRARY"
@@ -45,8 +52,145 @@ def _gdal():
     for name, (args, result) in signatures.items():
         fn = getattr(lib, name)
         fn.argtypes, fn.restype = args, result
+    if not os.environ.get("KLIMAPY_GDAL_LIBRARY"):
+        configure_gdal(lib)
     lib.GDALAllRegister()
     return lib
+
+
+@lru_cache(None)
+def _proj():
+    path = (
+        os.environ.get("KLIMAPY_PROJ_LIBRARY")
+        or bundled_library("proj")
+        or find_library("proj")
+    )
+    if not path:
+        raise RuntimeError("Native PROJ required for Shapefile CRS conversion")
+    lib = ct.CDLL(path)
+    P, S, I, N = ct.c_void_p, ct.c_char_p, ct.c_int, ct.c_size_t
+    signatures = {
+        "proj_context_create": ([], P),
+        "proj_context_destroy": ([P], None),
+        "proj_context_set_search_paths": ([P, I, ct.POINTER(S)], None),
+        "proj_context_set_enable_network": ([P, I], I),
+        "proj_create_crs_to_crs": ([P, S, S, P], P),
+        "proj_normalize_for_visualization": ([P, P], P),
+        "proj_destroy": ([P], P),
+        "proj_errno": ([P], I),
+        "proj_trans_generic": ([P, I] + [_DOUBLE, N, N] * 4, N),
+    }
+    for name, (args, result) in signatures.items():
+        fn = getattr(lib, name)
+        fn.argtypes, fn.restype = args, result
+    return lib
+
+
+def _to_wgs84(coordinates, crs):
+    """Batch coordinates through a private PROJ context, normalized to lon/lat."""
+    lib = _proj()
+    context = lib.proj_context_create()
+    if not context:
+        raise RuntimeError("Cannot create PROJ context")
+    operation = normalized = None
+    try:
+        data = os.environ.get("PROJ_DATA") or os.environ.get("PROJ_LIB")
+        if not data and not os.environ.get("KLIMAPY_PROJ_LIBRARY"):
+            data = bundled_data("proj")
+        if data:
+            locations = [os.fsencode(p) for p in data.split(os.pathsep) if p]
+            paths = (ct.c_char_p * len(locations))(*locations)
+            lib.proj_context_set_search_paths(context, len(locations), paths)
+        lib.proj_context_set_enable_network(context, 0)
+        operation = lib.proj_create_crs_to_crs(
+            context, crs.encode("utf-8"), b"EPSG:4326", None
+        )
+        if not operation:
+            raise ValueError(
+                "Cannot interpret Shapefile CRS or construct transformation"
+            )
+        normalized = lib.proj_normalize_for_visualization(context, operation)
+        if not normalized:
+            raise ValueError("Cannot normalize CRS axis order")
+        x = np.ascontiguousarray(coordinates[:, 0], dtype="float64")
+        y = np.ascontiguousarray(coordinates[:, 1], dtype="float64")
+        count = lib.proj_trans_generic(
+            normalized,
+            1,
+            _ptr(x),
+            8,
+            len(x),
+            _ptr(y),
+            8,
+            len(y),
+            None,
+            0,
+            0,
+            None,
+            0,
+            0,
+        )
+        if (
+            count != len(x)
+            or lib.proj_errno(normalized)
+            or not (np.isfinite(x).all() and np.isfinite(y).all())
+        ):
+            raise ValueError("Cannot transform Shapefile coordinates to EPSG:4326")
+        return np.column_stack([x, y])
+    finally:
+        if normalized:
+            lib.proj_destroy(normalized)
+        if operation:
+            lib.proj_destroy(operation)
+        lib.proj_context_destroy(context)
+
+
+def _shapefile_geometry(path):
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    prj = path.with_suffix(".prj")
+    if not prj.is_file():
+        candidates = [
+            p
+            for p in path.parent.iterdir()
+            if p.stem.casefold() == path.stem.casefold()
+            and p.suffix.casefold() == ".prj"
+        ]
+        if len(candidates) != 1:
+            raise ValueError("Shapefile needs a declared CRS in a .prj sidecar")
+        prj = candidates[0]
+    raw = prj.read_bytes()
+    try:
+        crs = raw.decode("utf-8-sig").strip()
+    except UnicodeDecodeError:
+        crs = raw.decode("latin-1").strip()
+    if not crs or "\0" in crs:
+        raise ValueError("Shapefile CRS is empty or invalid")
+    lib = _library()
+    lib.kl_shape_json.argtypes, lib.kl_shape_json.restype = [ct.c_char_p], ct.c_void_p
+    lib.kl_shape_json_free.argtypes, lib.kl_shape_json_free.restype = (
+        [ct.c_void_p],
+        None,
+    )
+    pointer = lib.kl_shape_json(str(path).encode("utf-8"))
+    if not pointer:
+        raise ValueError("Cannot read Shapefile geometry")
+    try:
+        geometry = json.loads(ct.string_at(pointer))
+    finally:
+        lib.kl_shape_json_free(pointer)
+    if "error" in geometry:
+        raise ValueError("Invalid Shapefile: " + geometry["error"])
+    rings = [ring for polygon in geometry["coordinates"] for ring in polygon]
+    transformed = _to_wgs84(
+        np.asarray([point for ring in rings for point in ring], dtype=float), crs
+    )
+    offset = 0
+    for ring in rings:
+        count = len(ring)
+        ring[:] = transformed[offset : offset + count].tolist()
+        offset += count
+    return geometry
 
 
 def _vector_geometries(path):
@@ -111,7 +255,11 @@ def polygons(geometry):
         geometry = (
             json.loads(path.read_text(encoding="utf-8"))
             if path.suffix.lower() in (".json", ".geojson")
-            else _vector_geometries(path)
+            else (
+                _shapefile_geometry(path)
+                if path.suffix.lower() == ".shp"
+                else _vector_geometries(path)
+            )
         )
     elif hasattr(geometry, "__geo_interface__"):
         crs = getattr(geometry, "crs", None)

@@ -109,6 +109,6 @@ def main():
     if Path('/proc/cpuinfo').exists():
         cpu=next((line.split(':',1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines() if line.startswith('model name')),cpu)
     report={'date':'2026-10-29','shape':list(values.shape),'repeats':args.repeats,'warmup':2,'threads':1,'cpu':cpu,'os':platform.system()+' '+platform.machine(),'python':platform.python_version(),'versions':reference['versions'],'rows':rows,'scope':'steady-state eager compute; input file I/O and process startup excluded; Bilinear includes weight construction on 30 daily fields; SVD/EOF use all 731 daily fields'}
-    target=ROOT/'website/klimapy/assets/community-benchmark.json';target.write_text(json.dumps(report,ensure_ascii=False,indent=2));print(json.dumps(report,ensure_ascii=False,indent=2))
+    target=folder/'community-benchmark.json';target.write_text(json.dumps(report,ensure_ascii=False,indent=2));print(json.dumps(report,ensure_ascii=False,indent=2))
 
 if __name__=='__main__':main()

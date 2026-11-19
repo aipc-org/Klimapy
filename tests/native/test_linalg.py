@@ -72,6 +72,30 @@ class SVDTests(TestCase):
         _, s, _ = svd(np.diag([1e150, 1.0, 1e-150]))
         np.testing.assert_allclose(s, [1e150, 1.0, 1e-150], rtol=1e-12, atol=0)
 
+    def test_faer_scaled_rectangles_and_repeated_subspace(self):
+        rng = np.random.default_rng(20261030)
+        base = rng.normal(size=(23, 8))
+        expected = np.linalg.svd(base, full_matrices=False)[1]
+        for scale in (1e-150, 1.0, 1e150):
+            u, singular, vt = svd(base * scale)
+            np.testing.assert_allclose(singular / scale, expected, rtol=1e-12)
+            np.testing.assert_allclose((u * (singular / scale)) @ vt, base, atol=1e-12)
+        q, _ = np.linalg.qr(rng.normal(size=(8, 8)))
+        matrix = q @ np.diag([4.0, 4.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0]) @ q.T
+        u, singular, vt = svd(matrix)
+        np.testing.assert_allclose(singular[:4], [4.0, 4.0, 2.0, 1.0], atol=1e-12)
+        np.testing.assert_allclose(
+            u[:, :2] @ u[:, :2].T, q[:, :2] @ q[:, :2].T, atol=1e-12
+        )
+        np.testing.assert_allclose((u * singular) @ vt, matrix, atol=1e-12)
+
+    def test_custom_legacy_convergence_controls_are_explicitly_rejected(self):
+        for options in ({"tol": 1e-10}, {"max_sweeps": 200}):
+            with self.assertRaisesRegex(ValueError, "faer manages convergence"):
+                svd(np.eye(3), **options)
+            with self.assertRaisesRegex(ValueError, "faer manages convergence"):
+                eof(np.ones((5, 2, 2)), **options)
+
     def test_invalid_inputs_and_convergence_failure(self):
         for data in ([1.0, 2.0], [[np.nan]], [[np.inf]], [[1j]], [["x"]]):
             with self.assertRaises(ValueError):
@@ -84,7 +108,7 @@ class SVDTests(TestCase):
         ):
             with self.assertRaises(ValueError):
                 svd(np.eye(3), **options)
-        with self.assertRaisesRegex(RuntimeError, "converge"):
+        with self.assertRaisesRegex(ValueError, "faer manages convergence"):
             svd(np.random.default_rng(0).normal(size=(15, 8)), max_sweeps=1)
 
 

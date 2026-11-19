@@ -27,6 +27,10 @@ regional = calculate_spatial_mean(field, method='weighted', include_zeros=True, 
 
 `shp` 接受 WGS84 Polygon/MultiPolygon GeoJSON 字典或文件、几何接口或矢量文件路径。
 掩膜按格点中心与几何相交判断，孔洞排除内部、保留边界；多个多边形取并集。
-GeoJSON 不需要 Python GIS 库；Shapefile 和 CRS 转换通过可选的原生 GDAL 完成。
-文件须声明 CRS；内存几何须已在 WGS84。缺少 GDAL 时明确报错。
+GeoJSON 使用标准库读取；Shapefile 几何由 Rust `shapefile` 读取，坐标直接通过原生 PROJ 转为 WGS84，不需要 GDAL。其他矢量格式仍使用原生 GDAL。
+Shapefile 必须提供同名 `.prj`（扩展名不区分大小写）；支持 Polygon、PolygonM、PolygonZ，掩膜只使用 XY，不读取属性表。
+外环和孔洞按实际包含关系归组，环在文件中的排列顺序不影响对应关系。空几何、非多边形、无效拓扑、损坏文件和未知 CRS 明确报错。
+几何相交由 Rust `geo` 计算，外边界和孔洞边界包含在掩膜内，孔洞内部排除；无效 GeoJSON 多边形同样报错。边界使用 geo 的稳健谓词，不再使用旧实现的 1e-12 近边界容差。
+PROJ 转换使用独立 context、经纬顺序规范化和本地坐标数据库，默认关闭网络下载。可以通过 `KLIMAPY_PROJ_LIBRARY` 和 `PROJ_DATA`/`PROJ_LIB` 明确指定开发用原生库或数据。
+其他矢量文件须声明 CRS；内存几何须已在 WGS84。缺少所需原生库时明确报错。
 不支持跨日期变更线的包裹多边形。

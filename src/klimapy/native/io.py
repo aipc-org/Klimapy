@@ -5,16 +5,17 @@ units/calendar attributes; decoding them into datetime objects is an adapter tas
 """
 
 import ctypes as ct
+import os
+import sys
+import threading
 from ctypes.util import find_library
 from functools import lru_cache
-import os
 from pathlib import Path
-import threading
-import sys
 
 import numpy as np
 
-from .._backends.rust import _library, _ptr, _SIZE_PTR, _INT_PTR
+from .._backends.rust import _INT_PTR, _SIZE_PTR, _library, _ptr
+from .._native_runtime import bundled_library
 
 
 def _name(value):
@@ -88,7 +89,7 @@ def _io_library():
         fn = getattr(lib, name)
         fn.argtypes, fn.restype = args, ct.c_int
     lib.kl_nc_error.argtypes, lib.kl_nc_error.restype = [ct.c_int], ct.c_char_p
-    library = os.environ.get("KLIMAPY_NETCDF_LIBRARY") or find_library("netcdf")
+    library = os.environ.get("KLIMAPY_NETCDF_LIBRARY") or bundled_library("netcdf") or find_library("netcdf")
     if not library and sys.platform == "darwin":
         # ctypes discovery can miss Homebrew outside dyld's search paths.
         for prefix in ("/opt/homebrew", "/usr/local"):

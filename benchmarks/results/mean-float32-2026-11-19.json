@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-19",
+  "float32_before": {
+    "engine": "klimapy",
+    "shape": [
+      256,
+      360,
+      640
+    ],
+    "dtype": "float32",
+    "python": "3.12.16",
+    "numpy": "2.5.4",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+    "klimapy": "1.2.1",
+    "module": "/opt/miniconda3/envs/Test/lib/python3.12/site-packages/klimapy/__init__.py",
+    "seconds": [
+      0.15204925400030334,
+      0.16122281299976748,
+      0.16180839099979494,
+      0.15930887300055474,
+      0.15294246900157304
+    ],
+    "median_seconds": 0.15930887300055474,
+    "timing_scope": "in-memory reduction, including output buffers and dtype conversion; excludes input loading and imports"
+  },
+  "float32_after": {
+    "engine": "klimapy",
+    "shape": [
+      256,
+      360,
+      640
+    ],
+    "dtype": "float32",
+    "python": "3.12.16",
+    "numpy": "2.5.4",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+    "klimapy": "1.2.1",
+    "module": "/home/yuhaoran/AIPC/Project/Klimapy/src/klimapy/__init__.py",
+    "seconds": [
+      0.04797182100082864,
+      0.04695973200068693,
+      0.04661656800089986,
+      0.04672013399977004,
+      0.04671454200070002
+    ],
+    "median_seconds": 0.04672013399977004,
+    "timing_scope": "in-memory reduction, including output buffers and dtype conversion; excludes input loading and imports"
+  },
+  "float64_after": {
+    "engine": "klimapy",
+    "shape": [
+      256,
+      360,
+      640
+    ],
+    "dtype": "float64",
+    "python": "3.12.16",
+    "numpy": "2.5.4",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+    "klimapy": "1.2.1",
+    "module": "/home/yuhaoran/AIPC/Project/Klimapy/src/klimapy/__init__.py",
+    "seconds": [
+      0.05878921499970602,
+      0.05566038700271747,
+      0.05644931900314987,
+      0.055125744998804294,
+      0.056578796000394505
+    ],
+    "median_seconds": 0.05644931900314987,
+    "timing_scope": "in-memory reduction, including output buffers and dtype conversion; excludes input loading and imports"
+  },
+  "float32_speedup": 3.409854796249918,
+  "results": "float32 and float64 bitwise-equal to previous accumulator output (NaNs matched)",
+  "acceptance": {
+    "source_native": 113,
+    "source_CN05_tile_checks": 128,
+    "installed_native": 113,
+    "installed_CN05_tile_checks": 128,
+    "CN05_new_float32_max_abs_error": 0.0
+  },
+  "scope": "Time mean / accumulator only; CN05.1 6x8 tile, not a full-grid real-data audit."
+}

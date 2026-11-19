@@ -1,15 +1,16 @@
 """Build the required Rust climate engine as a platform native library."""
 
+import importlib.util
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 from setuptools import Extension, setup
-from setuptools.command.build_ext import build_ext
 from setuptools._distutils.errors import CompileError
+from setuptools.command.build_ext import build_ext
 
 try:
     from setuptools.command.bdist_wheel import bdist_wheel
@@ -26,6 +27,24 @@ class RustBuild(build_ext):
 
     def build_extension(self, ext):
         self._build_rust(ext)
+        prefix = os.environ.get("KLIMAPY_NATIVE_PREFIX")
+        if not prefix and os.environ.get("KLIMAPY_REQUIRE_BUNDLE") == "1":
+            raise CompileError("Official wheels require KLIMAPY_NATIVE_PREFIX")
+        if prefix:
+            source = Path(__file__).parent / "tools/bundle_native_runtime.py"
+            spec = importlib.util.spec_from_file_location(
+                "bundle_native_runtime", source
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            module.stage_runtime(
+                prefix, Path(self.build_lib) / "klimapy/_native_runtime"
+            )
+        else:
+            # A prior bundled build must never leak into a later source wheel.
+            shutil.rmtree(
+                Path(self.build_lib) / "klimapy/_native_runtime", ignore_errors=True
+            )
 
     def copy_extensions_to_source(self):
         build_py = self.get_finalized_command("build_py")
@@ -88,6 +107,25 @@ class RustBuild(build_ext):
         destination.parent.mkdir(parents=True, exist_ok=True)
         # A running process may have the old library mapped: replace, never truncate.
         self._atomic_copy(target / "release" / filename, destination)
+        notices = Path(self.build_lib) / "klimapy/_third_party/rust"
+        shutil.rmtree(notices, ignore_errors=True)
+        vendor = Path(__file__).parent / "rust/vendor-crates"
+        for crate in sorted(vendor.iterdir()):
+            if not crate.is_dir():
+                continue
+            for source in crate.iterdir():
+                if source.is_file() and (
+                    source.name == "Cargo.toml"
+                    or source.name.upper().startswith(
+                        ("LICENSE", "COPYING", "NOTICE", "COPYRIGHT")
+                    )
+                ):
+                    out = notices / crate.name / source.name
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, out)
+        shutil.copytree(
+            Path(__file__).parent / "rust/licenses", notices / "upstream-workspaces"
+        )
 
 
 class NativeWheel(bdist_wheel):

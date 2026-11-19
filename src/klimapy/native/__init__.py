@@ -14,8 +14,13 @@ from .._backends.rust import (
 from .io import Dataset, open_dataset
 from ..statistics.linalg import svd, eof, EOFResult
 from .field import Field, TimeAxis, read_field
+from .collection import FileCollection, open_collection
+from .quality import quality_report
 
 __all__ = [
+    "FileCollection",
+    "open_collection",
+    "quality_report",
     "Field",
     "TimeAxis",
     "read_field",

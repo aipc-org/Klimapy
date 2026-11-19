@@ -9,6 +9,7 @@ struct Transfer {
     xhi: f64,
     ylo: f64,
     yhi: f64,
+    nonnegative: bool,
 }
 fn ok(n: usize) -> bool {
     n <= isize::MAX as usize / 8
@@ -27,6 +28,7 @@ pub unsafe extern "C" fn kl_transfer_new(
     obs: *const f64,
     no: usize,
     nquant: usize,
+    nonnegative: bool,
     error: *mut i32,
 ) -> *mut c_void {
     if error.is_null() {
@@ -40,7 +42,7 @@ pub unsafe extern "C" fn kl_transfer_new(
         let mut a: Vec<f64> = v
             .iter()
             .filter(|x| x.is_finite())
-            .map(|x| x.max(0.0))
+            .map(|x| if nonnegative { x.max(0.0) } else { *x })
             .collect();
         a.sort_unstable_by(f64::total_cmp);
         a
@@ -150,6 +152,7 @@ pub unsafe extern "C" fn kl_transfer_new(
         xhi: x[m - 1],
         ylo: y[0],
         yhi: y[m - 1],
+        nonnegative,
     }))
     .cast()
 }
@@ -171,7 +174,9 @@ pub unsafe extern "C" fn kl_transfer_apply(
     out.fill(f64::NAN);
     let mut indices = Vec::new();
     for (i, &x) in v.iter().enumerate() {
-        if x < p.xlo {
+        if !x.is_finite() {
+            continue;
+        } else if x < p.xlo {
             out[i] = p.ylo;
         } else if x > p.xhi {
             out[i] = p.yhi;
@@ -205,7 +210,7 @@ pub unsafe extern "C" fn kl_transfer_apply(
         }
     }
     for x in out {
-        if !x.is_nan() {
+        if p.nonnegative && !x.is_nan() {
             *x = if *x < 1e-10 { 0.0 } else { *x };
         }
     }
@@ -230,6 +235,7 @@ pub unsafe extern "C" fn kl_smooth(
     steps: usize,
     cells: usize,
     harmonics: usize,
+    nonnegative: bool,
 ) -> i32 {
     let Some(n) = steps.checked_mul(cells) else {
         return 1;
@@ -289,13 +295,13 @@ pub unsafe extern "C" fn kl_smooth(
             .collect();
         for t in 0..steps {
             if v[t * cells + c].is_finite() {
-                out[t * cells + c] = (mean
+                let value = mean
                     + coefficients
                         .iter()
                         .enumerate()
                         .map(|(k, (a, b))| a * cos[k][t] + b * sin[k][t])
-                        .sum::<f64>())
-                .max(0.0);
+                        .sum::<f64>();
+                out[t * cells + c] = if nonnegative { value.max(0.0) } else { value };
             }
         }
     }

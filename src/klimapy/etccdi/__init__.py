@@ -57,6 +57,17 @@ from .indices import (
     WSDI,
     CSDI,
     DTR,
+    RXnday,
+    RXdday,
+    Rnnmm,
+    Rx1day,
+    Rx5day,
+    R10mm,
+    R20mm,
+    R95p,
+    R99p,
+    R95pTOT,
+    R99pTOT,
 )
 
 __all__ = [
@@ -115,27 +126,7 @@ __all__ = [
     "WSDI",
     "CSDI",
     "DTR",
-]
-
-__all__.append("compute_indices")
-
-
-# Canonical ETCCDI spellings and generic parameterized precipitation metrics.
-from .indices import (
-    RXnday,
-    RXdday,
-    Rnnmm,
-    Rx1day,
-    Rx5day,
-    R10mm,
-    R20mm,
-    R95p,
-    R99p,
-    R95pTOT,
-    R99pTOT,
-)
-
-__all__ += [
+    "compute_indices",
     "RXnday",
     "RXdday",
     "Rnnmm",

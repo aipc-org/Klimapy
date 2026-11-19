@@ -19,41 +19,37 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
-      - name: Prepare Rust and build tools
+      - name: Prepare Rust
         run: |
           rustup toolchain install stable --profile minimal --component clippy --component rustfmt
           rustup default stable
-          python -m pip install build ruff
-      - name: Install native NetCDF runtime on Linux
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libnetcdf-dev
-      - name: Install native NetCDF runtime on macOS
-        if: runner.os == 'macOS'
-        run: brew install netcdf
-      - name: Check Rust and build native wheel
-        env:
-          KLIMAPY_BUILD_RUST: '1'
-        run: |
-          python tools/manage.py lint --rust
-          python tools/manage.py build --rust on --outdir native-dist
-      # The C ABI library must load on a different Python minor version.
       - uses: conda-incubator/setup-miniconda@04b72d7799e2bae3771b041de9b46c710d29caab # v4
         with:
           miniforge-version: latest
           activate-environment: Test
           environment-file: environment.yml
           python-version: '3.12'
-      - name: Install native NetCDF runtime on Windows
-        if: runner.os == 'Windows'
-        # Native DLLs live outside Test; no reference Python packages are installed.
+      - name: Prepare native-only wheel inputs outside Test
         run: |
-          conda create --yes --prefix "$RUNNER_TEMP/klimapy-netcdf" --override-channels -c conda-forge libnetcdf
-          echo "$RUNNER_TEMP/klimapy-netcdf/Library/bin" >> "$GITHUB_PATH"
-          echo "KLIMAPY_NETCDF_LIBRARY=$RUNNER_TEMP/klimapy-netcdf/Library/bin/netcdf.dll" >> "$GITHUB_ENV"
-      - name: Verify installed wheel and numerical compatibility
+          conda create --yes --prefix "$RUNNER_TEMP/klimapy-runtime" --override-channels -c conda-forge libnetcdf libgdal-core proj --no-default-packages
+          echo "KLIMAPY_NATIVE_PREFIX=$RUNNER_TEMP/klimapy-runtime" >> "$GITHUB_ENV"
+      - name: Check Rust and build bundled wheel
+        env:
+          KLIMAPY_BUILD_RUST: '1'
+          KLIMAPY_REQUIRE_BUNDLE: '1'
+        run: |
+          BUILD_PYTHON="$pythonLocation/bin/python"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then BUILD_PYTHON="$pythonLocation/python.exe"; fi
+          # Build tools belong to the setup-python interpreter, never Test.
+          "$BUILD_PYTHON" -m pip install build ruff pefile
+          if [[ "$RUNNER_OS" == "Linux" ]]; then "$BUILD_PYTHON" -m pip install patchelf; fi
+          "$BUILD_PYTHON" tools/manage.py lint --rust
+          "$BUILD_PYTHON" tools/manage.py build --rust on --outdir native-dist
+      - name: Verify installed wheel with no system runtime overrides
         run: |
           conda run -n Test python -m pip install --no-deps native-dist/*.whl
           conda run -n Test python tools/manage.py test --installed --require-rust
+          conda run -n Test python tools/check_bundled_runtime.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-wheel-${{ matrix.os }}

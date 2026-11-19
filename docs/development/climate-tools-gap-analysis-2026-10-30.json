@@ -1,0 +1,162 @@
+{
+  "date": "2026-10-30",
+  "scope": "Official-document and local-source comparison; no external-tool numerical/performance certification",
+  "priority_basis": "Klimapy precipitation/temperature, BCSD, regional and multi-model research workflows",
+  "items": [
+    {
+      "id": "collection",
+      "priority": "P0",
+      "capability": "多文件目录、合并与流式算子",
+      "status": "partial",
+      "current": "已实现日变量 FileCollection：日期排序、重叠拒绝、网格/单位校验、缺日计数、按时间块读取和原子合并。尚缺通用算子链、空间分块与多变量集合。",
+      "acceptance": "输入目录跨文件排序、重叠/缺口报告、窗口跨文件一致；限制打开句柄和峰值内存。",
+      "sources": [
+        "https://mpim-sw.gitlab-pages.dkrz.de/cdo/modules/man/Merge.html"
+      ],
+      "implementation": "../statistics/series.md"
+    },
+    {
+      "id": "temporal",
+      "priority": "P0",
+      "capability": "日/月/季/年聚合、距平与比较期选择",
+      "status": "partial",
+      "current": "已实现日输入逐月/季/年统计、月长加权与完整覆盖率，以及 CF 时间边界检查/输出。尚缺任意区间时间权重和通量单位积分。",
+      "acceptance": "DJF 年份归属、360_day/闰年、月长权重、通量累计和完整期检查均有独立参考。",
+      "sources": [
+        "https://mpim-sw.gitlab-pages.dkrz.de/cdo/modules/mod_statistic_toc.html",
+        "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/recipe/preprocessor.html"
+      ],
+      "implementation": "../statistics/series.md"
+    },
+    {
+      "id": "metadata",
+      "priority": "P0",
+      "capability": "CF 元数据、边界和质量控制报告",
+      "status": "partial",
+      "current": "已支持 Field 时间边界读写/切片/集合归一化与聚合输出，新增非破坏性 QC JSON；尚缺通用二维辅助坐标、空间 bounds/cell_measures 与完整 CF 认证。",
+      "acceptance": "保留 bounds/cell_methods/cell_measures，报告默认单位假设、缺测率和实际覆盖期；修复操作可追踪。",
+      "sources": [
+        "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/recipe/preprocessor.html"
+      ]
+    },
+    {
+      "id": "metrics",
+      "priority": "P0",
+      "capability": "统一模式评估与区域误差指标",
+      "status": "partial",
+      "current": "已实现严格共同日期/网格上的配对评估，可指定归约维度并使用显式平方米面积权重，输出有效权重覆盖率。尚缺集合模式评估、流式评估和显著性推断。",
+      "acceptance": "共同时间/格点/有效样本上验证 bias、MAE、RMSE、相关与面积加权误差；零方差明确处理。",
+      "sources": [
+        "https://docs.esmvaltool.org/en/latest/recipes/recipe_perfmetrics.html"
+      ],
+      "implementation": "../statistics/series.md"
+    },
+    {
+      "id": "recipe",
+      "priority": "P0",
+      "capability": "可复现任务配置与来源链",
+      "status": "partial",
+      "current": "已实现 JSON 顺序 load/aggregate/evaluate、逐步骤 QC、输入/输出哈希、参数/代码版本/父产物及失败记录；尚无缓存、断点恢复或任意诊断 DAG。",
+      "acceptance": "同一配置复现；参数、版本、输入指纹、网格、基准期、失败和父子产物均记录。",
+      "sources": [
+        "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/recipe/overview.html",
+        "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/quickstart/output.html"
+      ],
+      "implementation": "../tools/recipes.md"
+    },
+    {
+      "id": "ensemble",
+      "priority": "P1",
+      "capability": "多模式/多成员集合统计",
+      "status": "new",
+      "current": "循环处理多个模式不等于集合统计。",
+      "acceptance": "均值、中位数、分位带和变化一致率；明确模式与成员权重、有效模式数和时间/空间共同域。",
+      "sources": [
+        "https://mpim-sw.gitlab-pages.dkrz.de/cdo/modules/man/Ensstat.html",
+        "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/recipe/preprocessor.html"
+      ]
+    },
+    {
+      "id": "significance",
+      "priority": "P1",
+      "capability": "趋势、相关和场显著性",
+      "status": "partial",
+      "current": "已有线性趋势及去趋势；缺通用不确定性、自相关处理和多重检验流程。",
+      "acceptance": "合成无趋势/已知趋势及有自相关序列检验；CI、有效样本数和 FDR 单独返回。",
+      "sources": []
+    },
+    {
+      "id": "regridding",
+      "priority": "P1",
+      "capability": "周期经度、掩膜、面积与通用网格",
+      "status": "partial",
+      "current": "已有一维规则/不等距经纬网格的多种插值和守恒；缺周期接缝、二维曲线网格和明确面积元。",
+      "acceptance": "先测试 0–360/-180–180 接缝与掩膜；再支持二维辅助坐标，验证面积积分和覆盖分数。",
+      "sources": [
+        "https://xesmf.readthedocs.io/en/stable/why.html",
+        "https://xesmf.readthedocs.io/en/stable/notebooks/Masking.html"
+      ]
+    },
+    {
+      "id": "bias_adjustment",
+      "priority": "P1",
+      "capability": "温度校正、变化信号保持与交叉验证",
+      "status": "partial",
+      "current": "已支持降水乘法、温度加法 BCSD，以及非负日较差和联合最低温重建；提供独立温度数值参考与检验期切片。尚无 QDM 或通用交叉验证框架。",
+      "acceptance": "训练/验证隔离，温度 TX≥TN、降水非负和湿日频率；相对/绝对变化与尾部误差均评估。",
+      "sources": [
+        "https://xsdba.readthedocs.io/en/stable/",
+        "https://github.com/Ouranosinc/xsdba/blob/main/src/xsdba/adjustment.py"
+      ],
+      "implementation": "../downscaling/bcsd/variables.md"
+    },
+    {
+      "id": "events",
+      "priority": "P1",
+      "capability": "热浪、干旱和复合事件",
+      "status": "partial",
+      "current": "27 项核心指标对应入口已存在，但没有完整通用事件表与 SPI/SPEI 框架。",
+      "acceptance": "事件起止/持续/强度可核对，SPI 拟合/零值/PET 方法明确；各指标独立验证。",
+      "sources": [
+        "https://xclim.readthedocs.io/en/stable/indices.html",
+        "https://docs.esmvaltool.org/en/latest/recipes/index.html"
+      ]
+    },
+    {
+      "id": "circulation",
+      "priority": "P2",
+      "capability": "ENSO、遥相关、垂直层和环流诊断",
+      "status": "partial",
+      "current": "EOF/SVD 已有；不等于有标准气候指数、垂直插值或矢量旋转。",
+      "acceptance": "指定区域/层/基准期及滤波；气压层、混合层和风矢量口径经独立参考验证。",
+      "sources": [
+        "https://docs.esmvaltool.org/en/latest/recipes/index.html"
+      ]
+    },
+    {
+      "id": "formats",
+      "priority": "P2",
+      "capability": "Zarr/GRIB 与更大规模数据入口",
+      "status": "partial",
+      "current": "当前主要是 NetCDF，加有限 GeoTIFF/CSV 导出；没有通用 GRIB/Zarr 入口。",
+      "acceptance": "逐格式证明时间、单位、缺测及分块一致；单独核验原生依赖及跨平台 wheel。",
+      "sources": []
+    }
+  ],
+  "sources": {
+    "cdo_merge": "https://mpim-sw.gitlab-pages.dkrz.de/cdo/modules/man/Merge.html",
+    "cdo_statistics": "https://mpim-sw.gitlab-pages.dkrz.de/cdo/modules/mod_statistic_toc.html",
+    "cdo_ensemble": "https://mpim-sw.gitlab-pages.dkrz.de/cdo/modules/man/Ensstat.html",
+    "esmvalcore_preprocess": "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/recipe/preprocessor.html",
+    "esmvalcore_recipe": "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/recipe/overview.html",
+    "esmvalcore_output": "https://docs.esmvaltool.org/projects/ESMValCore/en/latest/quickstart/output.html",
+    "esmvaltool_metrics": "https://docs.esmvaltool.org/en/latest/recipes/recipe_perfmetrics.html",
+    "esmvaltool_recipes": "https://docs.esmvaltool.org/en/latest/recipes/index.html",
+    "xesmf_grids": "https://xesmf.readthedocs.io/en/stable/why.html",
+    "xesmf_masks": "https://xesmf.readthedocs.io/en/stable/notebooks/Masking.html",
+    "xclim_indices": "https://xclim.readthedocs.io/en/stable/indices.html",
+    "xsdba": "https://xsdba.readthedocs.io/en/stable/",
+    "xsdba_algorithms": "https://github.com/Ouranosinc/xsdba/blob/main/src/xsdba/adjustment.py"
+  },
+  "implementation_update": "2026-10-30; variable-specific BCSD and coupled TX/DTR/TN added; remaining roadmap criteria are not claimed complete"
+}

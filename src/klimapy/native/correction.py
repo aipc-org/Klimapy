@@ -2,18 +2,19 @@
 
 import ctypes as ct
 import threading
-import weakref
 import warnings
+import weakref
 
 import numpy as np
 
+from .._backends.rust import _DOUBLE, _SIZE, _check, _library, _ptr
 from .statistics import _real
-
-from .._backends.rust import _library, _ptr, _DOUBLE, _SIZE, _check
 
 
 class Transfer:
-    def __init__(self, model, observed, n_quantiles=50):
+    def __init__(self, model, observed, n_quantiles=50, *, nonnegative=True):
+        if not isinstance(nonnegative, bool):
+            raise TypeError("nonnegative must be boolean")
         a, b = (_real(v).ravel() for v in (model, observed))
         if (
             isinstance(n_quantiles, bool)
@@ -28,6 +29,7 @@ class Transfer:
             _DOUBLE,
             _SIZE,
             _SIZE,
+            ct.c_bool,
             ct.POINTER(ct.c_int),
         ]
         lib.kl_transfer_new.restype = ct.c_void_p
@@ -37,7 +39,7 @@ class Transfer:
         lib.kl_transfer_free.restype = None
         error = ct.c_int()
         self._handle = lib.kl_transfer_new(
-            _ptr(a), a.size, _ptr(b), b.size, n_quantiles, ct.byref(error)
+            _ptr(a), a.size, _ptr(b), b.size, n_quantiles, nonnegative, ct.byref(error)
         )
         if error.value == 2:
             raise ValueError("At least 20 finite observations are required per series")
@@ -80,7 +82,7 @@ class Transfer:
         self.close()
 
 
-def smooth(values, n_harmonics=3):
+def smooth(values, n_harmonics=3, *, nonnegative=True):
     a = _real(values)
     if (
         a.ndim < 1
@@ -90,7 +92,19 @@ def smooth(values, n_harmonics=3):
     ):
         raise ValueError("Expected time axis and nonnegative integer harmonics")
     fn = _library().kl_smooth
-    fn.argtypes, fn.restype = [_DOUBLE, _DOUBLE, _SIZE, _SIZE, _SIZE], ct.c_int
+    fn.argtypes, fn.restype = (
+        [_DOUBLE, _DOUBLE, _SIZE, _SIZE, _SIZE, ct.c_bool],
+        ct.c_int,
+    )
     out = np.empty_like(a)
-    _check(fn(_ptr(a), _ptr(out), len(a), int(np.prod(a.shape[1:])), n_harmonics))
+    _check(
+        fn(
+            _ptr(a),
+            _ptr(out),
+            len(a),
+            int(np.prod(a.shape[1:])),
+            n_harmonics,
+            nonnegative,
+        )
+    )
     return out.astype("float32")

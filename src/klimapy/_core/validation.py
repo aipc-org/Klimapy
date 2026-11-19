@@ -2,24 +2,10 @@
 
 import numpy as np
 
-from ..native.field import Field, TimeAxis, _date, _ordinal, month_lengths
+from ..native.field import Field, _ordinal, month_lengths
 from ..native.statistics import affine
 
 PRECIP_NAMES = ("pr", "pre", "precip", "precipitation", "rain", "prec", "tp")
-TEMP_NAMES = (
-    "tas",
-    "tasmax",
-    "tasmin",
-    "tmax",
-    "tmin",
-    "tx",
-    "tn",
-    "tg",
-    "temperature",
-    "temp",
-    "t2m",
-    "tm",
-)
 
 
 def convert_units(data, kind):
@@ -58,7 +44,7 @@ def convert_units(data, kind):
         if unit not in scales:
             raise ValueError("Unsupported precipitation units: " + original)
         scale, target = scales[unit], "mm/day"
-    elif kind == "temperature":
+    elif kind in ("temperature", "temperature_difference"):
         celsius = (
             "",
             "c",
@@ -72,7 +58,10 @@ def convert_units(data, kind):
         kelvin = ("k", "kelvin", "degk", "degrees_kelvin", "degree_kelvin")
         if unit not in celsius + kelvin:
             raise ValueError("Unsupported temperature units: " + original)
-        offset, target = (-273.15 if unit in kelvin else 0.0), "degC"
+        offset, target = (
+            (-273.15 if unit in kelvin and kind == "temperature" else 0.0),
+            "degC",
+        )
     else:
         raise ValueError("kind must be precip or temperature")
     attrs = dict(data.attrs, units=target)

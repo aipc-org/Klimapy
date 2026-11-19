@@ -380,3 +380,165 @@ pub unsafe extern "C" fn climate_accumulate(
     }
     0
 }
+
+/// Additive temperature SD: interpolate coarse anomalies, then restore fine climate.
+/// # Safety
+/// Plan and disjoint buffers follow downscale_block's contract; coarse has
+/// ndays*source values and days has steps valid zero-based indices.
+#[no_mangle]
+pub unsafe extern "C" fn temperature_downscale_block(
+    handle: *const c_void,
+    values: *const f64,
+    coarse: *const f64,
+    fine: *const f64,
+    days: *const usize,
+    output: *mut f64,
+    steps: usize,
+    ndays: usize,
+    nonnegative: bool,
+) -> i32 {
+    if handle.is_null()
+        || values.is_null()
+        || coarse.is_null()
+        || fine.is_null()
+        || days.is_null()
+        || output.is_null()
+    {
+        return 1;
+    }
+    let p = &*handle.cast::<Plan>();
+    if p.normalize {
+        return 1;
+    }
+    let sizes = [
+        steps.checked_mul(p.source),
+        ndays.checked_mul(p.source),
+        steps.checked_mul(p.rows.len()),
+        ndays.checked_mul(p.rows.len()),
+    ];
+    if sizes
+        .iter()
+        .any(|n| n.is_none_or(|n| n > isize::MAX as usize / 8))
+        || steps > isize::MAX as usize / std::mem::size_of::<usize>()
+    {
+        return 1;
+    }
+    let v = std::slice::from_raw_parts(values, sizes[0].unwrap());
+    let c = std::slice::from_raw_parts(coarse, sizes[1].unwrap());
+    let d = std::slice::from_raw_parts(days, steps);
+    if d.iter().any(|&v| v >= ndays) {
+        return 1;
+    }
+    let mut anomaly = vec![f64::NAN; v.len()];
+    for t in 0..steps {
+        for i in 0..p.source {
+            anomaly[t * p.source + i] = v[t * p.source + i] - c[d[t] * p.source + i];
+        }
+    }
+    let code = grid_plan_apply(handle, anomaly.as_ptr(), output, steps);
+    if code != 0 {
+        return code;
+    }
+    let f = std::slice::from_raw_parts(fine, sizes[3].unwrap());
+    let o = std::slice::from_raw_parts_mut(output, sizes[2].unwrap());
+    for t in 0..steps {
+        for i in 0..p.rows.len() {
+            let v = o[t * p.rows.len() + i] + f[d[t] * p.rows.len() + i];
+            o[t * p.rows.len() + i] = if nonnegative && v.is_finite() {
+                v.max(0.0)
+            } else {
+                v
+            };
+        }
+    }
+    0
+}
+
+/// Derive DTR=TX-TN or reconstruct TN=TX-DTR without hiding invalid inputs.
+/// # Safety
+/// a,b,out have n elements, writable output does not overlap either input.
+#[no_mangle]
+pub unsafe extern "C" fn kl_temperature_pair(
+    a: *const f64,
+    b: *const f64,
+    out: *mut f64,
+    n: usize,
+    reconstruct: bool,
+) -> i32 {
+    if a.is_null() || b.is_null() || out.is_null() || n > isize::MAX as usize / 8 {
+        return 1;
+    }
+    let a = std::slice::from_raw_parts(a, n);
+    let b = std::slice::from_raw_parts(b, n);
+    let o = std::slice::from_raw_parts_mut(out, n);
+    for i in 0..n {
+        o[i] = if a[i].is_finite() && b[i].is_finite() {
+            if reconstruct && b[i] < 0.0 {
+                return 2;
+            }
+            let difference = a[i] - b[i];
+            if !reconstruct && difference < 0.0 {
+                return 2;
+            }
+            difference
+        } else {
+            f64::NAN
+        };
+    }
+    0
+}
+
+/// Accumulate float32 input directly into float64 sums without a conversion cube.
+/// This is additive to the ABI; the float64 entry point retains its semantics.
+/// # Safety
+/// values=steps*cells, days=steps, sums/counts=ndays*cells, with disjoint buffers.
+#[no_mangle]
+pub unsafe extern "C" fn climate_accumulate_f32(
+    values: *const f32,
+    days: *const isize,
+    sums: *mut f64,
+    counts: *mut i32,
+    steps: usize,
+    cells: usize,
+    ndays: usize,
+) -> i32 {
+    let (Some(n), Some(c)) = (steps.checked_mul(cells), ndays.checked_mul(cells)) else {
+        return 1;
+    };
+    if values.is_null()
+        || days.is_null()
+        || sums.is_null()
+        || counts.is_null()
+        || n > isize::MAX as usize / 4
+        || c > isize::MAX as usize / 8
+        || steps > isize::MAX as usize / std::mem::size_of::<isize>()
+    {
+        return 1;
+    }
+    let (v, d, s, k) = (
+        std::slice::from_raw_parts(values, n),
+        std::slice::from_raw_parts(days, steps),
+        std::slice::from_raw_parts_mut(sums, c),
+        std::slice::from_raw_parts_mut(counts, c),
+    );
+    if d.iter().any(|&x| x < -1 || x >= ndays as isize) {
+        return 1;
+    }
+    for t in 0..steps {
+        if d[t] < 0 {
+            continue;
+        }
+        let group = d[t] as usize * cells;
+        for i in 0..cells {
+            let value = v[t * cells + i];
+            if value.is_finite() {
+                let Some(count) = k[group + i].checked_add(1) else {
+                    return 1;
+                };
+                s[group + i] += f64::from(value);
+                k[group + i] = count;
+            }
+        }
+    }
+    0
+}

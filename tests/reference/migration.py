@@ -7,9 +7,11 @@ import numpy as np
 from scipy.interpolate import UnivariateSpline
 
 
-def transfer(model, observed, query, n_quantiles=50):
-    a = np.maximum(np.asarray(model)[np.isfinite(model)], 0.0)
-    b = np.maximum(np.asarray(observed)[np.isfinite(observed)], 0.0)
+def transfer(model, observed, query, n_quantiles=50, *, nonnegative=True):
+    a = np.asarray(model)[np.isfinite(model)]
+    b = np.asarray(observed)[np.isfinite(observed)]
+    if nonnegative:
+        a, b = np.maximum(a, 0), np.maximum(b, 0)
     if min(len(a), len(b)) < 20:
         return np.asarray(query).copy()
     count = min(n_quantiles, max(20, int(min(len(a), len(b)) / 25)))
@@ -21,11 +23,13 @@ def transfer(model, observed, query, n_quantiles=50):
     spline = UnivariateSpline(x, y, k=3, s=0.8 * len(x))
     query = np.asarray(query)
     result = np.where(query < x[0], y[0], np.where(query > x[-1], y[-1], spline(query)))
+    if not nonnegative:
+        return np.where(np.isfinite(query), result, np.nan)
     result = np.maximum(result, 0.0)
     return np.where(result < 1e-10, 0.0, result)
 
 
-def smooth(values, harmonics=3):
+def smooth(values, harmonics=3, *, nonnegative=True):
     shape = values.shape
     flat = np.asarray(values, dtype=float).reshape(len(values), -1).copy()
     missing = ~np.isfinite(flat)
@@ -35,7 +39,9 @@ def smooth(values, harmonics=3):
         flat[:, c] = np.interp(t, t[valid], flat[valid, c]) if valid.any() else 0.0
     frequency = np.fft.rfft(flat, axis=0)
     frequency[harmonics + 1 :] = 0.0
-    result = np.maximum(np.fft.irfft(frequency, n=len(flat), axis=0), 0.0)
+    result = np.fft.irfft(frequency, n=len(flat), axis=0)
+    if nonnegative:
+        result = np.maximum(result, 0)
     result[missing] = np.nan
     return result.reshape(shape).astype("float32")
 

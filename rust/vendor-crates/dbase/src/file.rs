@@ -1,0 +1,833 @@
+use crate::ErrorKind::UnsupportedCodePage;
+use crate::encoding::DynEncoding;
+use crate::error::FieldContext;
+use crate::field::{DELETION_FLAG_SIZE, DeletionFlag, FieldsInfo};
+use crate::header::Header;
+use crate::memo::MemoReader;
+use crate::reading::{BACKLINK_SIZE, ReadingOptions};
+use crate::writing::{WritableAsDbaseField, write_header_parts};
+use crate::{
+    Encoding, Error, ErrorKind, FieldConversionError, FieldError, FieldInfo, FieldIterator,
+    FieldValue, FieldWriter, ReadableRecord, TableInfo, WritableRecord,
+};
+use byteorder::ReadBytesExt;
+use std::fmt::{Debug, Formatter};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::path::Path;
+
+pub type BufReadWriteFile = bufrw::BufReaderWriter<std::fs::File>;
+
+/// Index to a field in a record
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub struct FieldIndex(pub usize);
+
+/// Index to a record in a dBase file
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
+pub struct RecordIndex(pub usize);
+
+/// 'reference' to a field in a dBase file.
+///
+/// - Allows to read the field content via [Self::read] or [Self::read_as]
+/// - Allows to overwrite the field content via [Self::write]
+pub struct FieldRef<'a, T> {
+    file: &'a mut File<T>,
+    record_index: RecordIndex,
+    field_index: FieldIndex,
+}
+
+impl<T> Debug for FieldRef<'_, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FieldRef")
+            .field("record_index", &self.record_index)
+            .field("field_index", &self.field_index)
+            .finish()
+    }
+}
+
+impl<T> FieldRef<'_, T> {
+    fn position_in_source(&self) -> u64 {
+        let record_position = self
+            .file
+            .header
+            .record_position(self.record_index.0)
+            .unwrap() as u64;
+
+        record_position + self.position_in_record() as u64
+    }
+
+    fn position_in_record(&self) -> usize {
+        self.file
+            .fields_info
+            .field_position_in_record(self.field_index.0)
+            .expect("internal error: invalid field index")
+    }
+}
+
+impl<T> FieldRef<'_, T>
+where
+    T: Seek,
+{
+    fn seek_to_beginning(&mut self) -> Result<u64, ErrorKind> {
+        self.file
+            .inner
+            .seek(SeekFrom::Start(self.position_in_source()))
+            .map_err(ErrorKind::IoError)
+    }
+}
+
+impl<T> FieldRef<'_, T>
+where
+    T: Seek + Read,
+{
+    /// Reads and returns the value
+    pub fn read(&mut self) -> Result<FieldValue, Error> {
+        self.file
+            .ensure_record_has_been_read_into_buffer(self.record_index)?;
+
+        let field_info = &self.file.fields_info[self.field_index.0];
+
+        let start_pos = self.position_in_record();
+        let field_bytes = &mut self.file.record_data_buffer.get_mut()
+            [start_pos..start_pos + field_info.field_length as usize];
+
+        FieldValue::read_from(
+            field_bytes,
+            &mut self.file.memo_reader,
+            field_info,
+            &self.file.encoding,
+            self.file.options.character_trim,
+        )
+        .map_err(|e| {
+            Error::field(
+                self.record_index,
+                FieldContext {
+                    index: self.field_index,
+                    name: field_info.name.clone(),
+                    kind: field_info.field_type(),
+                },
+                e,
+            )
+        })
+    }
+
+    /// Reads and returns the value converted to the requested type
+    pub fn read_as<ValueType>(&mut self) -> Result<ValueType, Error>
+    where
+        ValueType: TryFrom<FieldValue, Error = FieldConversionError>,
+    {
+        let value = self.read()?;
+
+        let converted_value = ValueType::try_from(value).map_err(|e| {
+            let field_info = &self.file.fields_info[self.field_index.0];
+
+            Error::field(
+                self.record_index,
+                FieldContext {
+                    index: self.field_index,
+                    name: field_info.name.clone(),
+                    kind: field_info.field_type(),
+                },
+                ErrorKind::BadConversion(e),
+            )
+        })?;
+
+        Ok(converted_value)
+    }
+}
+
+impl<T> FieldRef<'_, T>
+where
+    T: Seek + Write,
+{
+    /// Writes the value
+    pub fn write<ValueType>(&mut self, value: &ValueType) -> Result<(), Error>
+    where
+        ValueType: WritableAsDbaseField,
+    {
+        self.file.file_position = self.seek_to_beginning().map_err(|e| {
+            let field_info = &self.file.fields_info[self.field_index.0];
+            Error::from_field_error(
+                self.record_index,
+                FieldError::from_info(self.field_index, field_info, e),
+            )
+        })?;
+
+        let field_info = &self.file.fields_info[self.field_index.0];
+
+        let start_pos = self.position_in_record();
+        let field_bytes = &mut self.file.record_data_buffer.get_mut()
+            [start_pos..start_pos + field_info.field_length as usize];
+        field_bytes.fill(0);
+
+        // Note that since we modify the internal buffer, we don't need to re-read the
+        // record / buffer, meaning if a user writes then reads it should get correct
+        // value, and we did not re-read from file.
+        let mut cursor = Cursor::new(field_bytes);
+        value
+            .write_as(field_info, &self.file.encoding, &mut cursor)
+            .map_err(|e| {
+                Error::from_field_error(
+                    self.record_index,
+                    FieldError::from_info(self.field_index, field_info, e),
+                )
+            })?;
+
+        let buffer = cursor.into_inner();
+
+        self.file.inner.write_all(buffer).map_err(|e| {
+            Error::from_field_error(
+                self.record_index,
+                FieldError::from_info(self.field_index, field_info, e),
+            )
+        })?;
+
+        self.file.file_position += buffer.len() as u64;
+
+        Ok(())
+    }
+}
+
+/// 'reference' to a record in a dBase file.
+///
+/// This can be used to read/write the whole record at once,
+/// or select a particular field in the file [Self::field].
+///
+/// - Allows to read the field content via [Self::read] or [Self::read_as]
+/// - Allows to overwrite the field content via [Self::write]
+pub struct RecordRef<'a, T> {
+    file: &'a mut File<T>,
+    index: RecordIndex,
+}
+
+impl<T> Debug for RecordRef<'_, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecordRef")
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+impl<T> RecordRef<'_, T> {
+    pub fn field(&mut self, index: FieldIndex) -> Option<FieldRef<'_, T>> {
+        if index.0 >= self.file.fields_info.len() {
+            return None;
+        }
+        Some(FieldRef {
+            file: self.file,
+            record_index: self.index,
+            field_index: index,
+        })
+    }
+
+    fn position_in_source(&self) -> u64 {
+        self.file.header.record_position(self.index.0).unwrap() as u64
+    }
+}
+
+impl<T> RecordRef<'_, T>
+where
+    T: Seek,
+{
+    pub fn seek_before_deletion_flag(&mut self) -> Result<u64, ErrorKind> {
+        self.file
+            .inner
+            .seek(SeekFrom::Start(self.position_in_source()))
+            .map_err(ErrorKind::IoError)
+    }
+}
+
+impl<T> RecordRef<'_, T>
+where
+    T: Read + Seek,
+{
+    /// Returns the value of the special deletion flag
+    ///
+    /// - true -> the record is marked as deleted
+    /// - false -> the record is **not** marked as deleted
+    pub fn is_deleted(&mut self) -> Result<bool, Error> {
+        self.file
+            .ensure_record_has_been_read_into_buffer(self.index)?;
+        let deletion_flag = DeletionFlag::from_byte(self.file.record_data_buffer.get_ref()[0]);
+
+        Ok(deletion_flag == DeletionFlag::Deleted)
+    }
+
+    /// reads a field from the record
+    ///
+    /// Shortcut for `.field(index).unwrap().read().unwrap();`
+    pub fn read_field(&mut self, field_index: FieldIndex) -> Result<FieldValue, Error> {
+        let record_index = self.index;
+        let mut field = self
+            .field(field_index)
+            .ok_or_else(|| Error::from_field_error(record_index, FieldError::end_of_record()))?;
+        field.read()
+    }
+
+    /// reads a field from the record
+    ///
+    /// Shortcut for `.field(index).unwrap().read_as().unwrap();`
+    pub fn read_field_as<ValueType>(&mut self, field_index: FieldIndex) -> Result<ValueType, Error>
+    where
+        ValueType: TryFrom<FieldValue, Error = FieldConversionError>,
+    {
+        let record_index = self.index;
+        let mut field = self
+            .field(field_index)
+            .ok_or_else(|| Error::from_field_error(record_index, FieldError::end_of_record()))?;
+        field.read_as()
+    }
+
+    /// Reads the record
+    pub fn read(&mut self) -> Result<crate::Record, Error> {
+        self.read_as()
+    }
+
+    /// Reads the record as the given type
+    pub fn read_as<R>(&mut self) -> Result<R, Error>
+    where
+        R: ReadableRecord,
+    {
+        self.file
+            .ensure_record_has_been_read_into_buffer(self.index)?;
+        self.file
+            .record_data_buffer
+            .set_position(DELETION_FLAG_SIZE as u64);
+        let mut field_iterator = FieldIterator {
+            source: &mut self.file.record_data_buffer,
+            fields_info: &self.file.fields_info.inner,
+            next_index: FieldIndex(0),
+            memo_reader: &mut self.file.memo_reader,
+            field_data_buffer: &mut self.file.field_data_buffer,
+            encoding: &self.file.encoding,
+            options: self.file.options,
+        };
+
+        R::read_using(&mut field_iterator).map_err(|err| Error::from_field_error(self.index, err))
+    }
+}
+
+impl<T> RecordRef<'_, T>
+where
+    T: Write + Seek,
+{
+    /// writes a field to the record
+    ///
+    /// Shortcut for `.field(index).unwrap().write(&value).unwrap();`
+    pub fn write_field<ValueType>(
+        &mut self,
+        field_index: FieldIndex,
+        value: &ValueType,
+    ) -> Result<(), Error>
+    where
+        ValueType: WritableAsDbaseField,
+    {
+        let record_index = self.index;
+        let mut field = self
+            .field(field_index)
+            .ok_or_else(|| Error::from_field_error(record_index, FieldError::end_of_record()))?;
+        field.write(value)
+    }
+
+    /// Writes the content of `record` ath the position
+    /// pointed by `self`.
+    pub fn write<R>(&mut self, record: &R) -> Result<(), Error>
+    where
+        R: WritableRecord,
+    {
+        self.file.record_data_buffer.get_mut().fill(0);
+        self.file.record_data_buffer.get_mut()[0] = DeletionFlag::NotDeleted.to_byte();
+        self.file.record_data_buffer.set_position(1);
+
+        let mut field_writer = FieldWriter {
+            dst: &mut self.file.record_data_buffer,
+            fields_info: &self.file.fields_info.inner,
+            next_index: FieldIndex(0),
+            field_buffer: &mut Cursor::new(&mut self.file.field_data_buffer),
+            encoding: &self.file.encoding,
+        };
+
+        record
+            .write_using(&mut field_writer)
+            .map_err(|error| Error::from_field_error(self.index, error))?;
+
+        self.seek_before_deletion_flag()
+            .map_err(|error| Error::deletion_flag(self.index, error))?;
+
+        self.file
+            .inner
+            .write_all(self.file.record_data_buffer.get_ref())
+            .map_err(|error| Error::record(self.index, error))?;
+
+        // We don't need to update the file's inner position as we re-wrote the whole record
+        debug_assert_eq!(
+            self.file.file_position,
+            self.file.inner.stream_position().unwrap()
+        );
+
+        Ok(())
+    }
+}
+
+/// Iterator over the records in a File
+pub struct FileRecordIterator<'a, T> {
+    file: &'a mut File<T>,
+    current_record: RecordIndex,
+}
+
+impl<T> FileRecordIterator<'_, T>
+where
+    T: Seek + Read,
+{
+    // To implement iterator we need the Iterator trait to make use of GATs
+    // which is not the case, to iteration will have to use the while let Some() pattern
+    pub fn next(&mut self) -> Option<RecordRef<'_, T>> {
+        let record_ref = self.file.record(self.current_record.0);
+        self.current_record.0 += usize::from(record_ref.is_some());
+        record_ref
+    }
+}
+
+/// Handle to a dBase File.
+///
+/// A `File`, allows to both read and write, it also
+/// allows to do modifications on an existing file,
+/// and enables to only read/modify parts of a file without
+/// first having to fully read it.
+///
+/// # Example
+///
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut file = dbase::File::open_read_only("tests/data/stations.dbf")?;
+///
+/// assert_eq!(file.num_records(), 86);
+///
+/// let name_idx = file.field_index("name").unwrap();
+/// let marker_color_idx = file.field_index("marker-col").unwrap();
+/// let marker_symbol_idx = file.field_index("marker-sym").unwrap();
+///
+/// // Test manually reading fields (not in correct order) to FieldValue
+/// let mut rh = file.record(3).unwrap();
+/// let marker_color = rh.field(marker_color_idx).unwrap().read()?;
+/// assert_eq!(
+///    marker_color,
+///    dbase::FieldValue::Character(Some("#ff0000".to_string()))
+/// );
+/// let name = rh.field(name_idx).unwrap().read()?;
+/// assert_eq!(
+///    name,
+///    dbase::FieldValue::Character(Some("Judiciary Sq".to_string()))
+/// );
+/// let marker_symbol = rh.field(marker_symbol_idx).unwrap().read()?;
+/// assert_eq!(
+///    marker_symbol,
+///    dbase::FieldValue::Character(Some("rail-metro".to_string()))
+/// );
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug)]
+pub struct File<T> {
+    pub(crate) inner: T,
+    memo_reader: Option<MemoReader<T>>,
+    pub(crate) header: Header,
+    pub(crate) fields_info: FieldsInfo,
+    pub(crate) encoding: DynEncoding,
+    /// Buffer that contains a whole record worth of data
+    /// It also contains the deletion flag
+    record_data_buffer: Cursor<Vec<u8>>,
+    /// Non-Memo field length is stored on a u8,
+    /// so fields cannot exceed 255 bytes
+    field_data_buffer: [u8; 255],
+    pub(crate) options: ReadingOptions,
+    /// We track the position in the file
+    /// to avoid calling `seek` when we are reading buffer
+    /// in order (0, 1, 2, etc)
+    file_position: u64,
+}
+
+impl<T> File<T> {
+    /// Returns the information about fields present in the records
+    pub fn fields(&self) -> &[FieldInfo] {
+        self.fields_info.as_ref()
+    }
+
+    /// Returns the field index that corresponds to the given name
+    pub fn field_index(&self, name: &str) -> Option<FieldIndex> {
+        self.fields_info
+            .iter()
+            .position(|info| info.name.eq_ignore_ascii_case(name))
+            .map(FieldIndex)
+    }
+
+    /// Returns the number of records in the file
+    pub fn num_records(&self) -> usize {
+        self.header.num_records as usize
+    }
+
+    pub fn set_options(&mut self, options: ReadingOptions) {
+        self.options = options;
+    }
+}
+
+pub(crate) fn open_dbase<T>(
+    source: &mut T,
+    encoding_override: Option<DynEncoding>,
+) -> Result<(Header, FieldsInfo, DynEncoding), Error>
+where
+    T: Read + Seek,
+{
+    let mut header = Header::read_from(source).map_err(Error::header)?;
+
+    let offset = if header.file_type.is_visual_fox_pro() {
+        if BACKLINK_SIZE > header.offset_to_first_record {
+            return Err(Error::header(ErrorKind::InvalidFile(
+                "File is invalid (BACKLINK_SIZE too big)",
+            )));
+        }
+        header.offset_to_first_record - BACKLINK_SIZE
+    } else {
+        header.offset_to_first_record
+    };
+
+    let num_fields = usize::from(offset)
+        .checked_sub(Header::SIZE + size_of::<u8>())
+        .map(|v| v / FieldInfo::SIZE)
+        .ok_or_else(|| {
+            Error::header(ErrorKind::InvalidFile(
+                "offset to first record is before end of header",
+            ))
+        })?;
+
+    // If encoding is specified, use it; otherwise, use the code page mark
+    let encoding = match encoding_override {
+        Some(encoding) => encoding,
+        None => header
+            .code_page_mark
+            .to_encoding()
+            .ok_or_else(|| Error::header(UnsupportedCodePage(header.code_page_mark)))?,
+    };
+
+    let fields_info =
+        FieldsInfo::read_from(source, num_fields, &encoding).map_err(Error::header)?;
+
+    // We chose to not check the content of this value, ideally it should be
+    // TERMINATOR_VALUE
+    let _terminator = source.read_u8().map_err(Error::header)?;
+
+    source
+        .seek(SeekFrom::Start(u64::from(header.offset_to_first_record)))
+        .map_err(Error::header)?;
+
+    let record_size: usize = DELETION_FLAG_SIZE + fields_info.size_of_all_fields();
+    // Some file seems not to include the DELETION_FLAG_SIZE into the record size,
+    // but we rely on it
+    header.size_of_record = record_size as u16;
+
+    Ok((header, fields_info, encoding))
+}
+
+impl<T: Read + Seek> File<T> {
+    /// creates of File using source as the storage space with encoding.
+    pub fn open_with_encoding<E>(source: T, encoding: E) -> Result<Self, Error>
+    where
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
+        Self::open_inner(source, Some(encoding))
+    }
+
+    /// creates of File using source as the storage space.
+    pub fn open(source: T) -> Result<Self, Error> {
+        Self::open_inner(source, None::<DynEncoding>)
+    }
+
+    pub(crate) fn open_inner<E>(mut source: T, encoding: Option<E>) -> Result<Self, Error>
+    where
+        E: Encoding + 'static + Into<DynEncoding>,
+    {
+        let (header, fields_info, encoding) =
+            open_dbase(&mut source, encoding.map(|encoding| encoding.into()))?;
+        let record_data_buffer = Cursor::new(vec![0u8; header.size_of_record as usize]);
+        Ok(Self {
+            inner: source,
+            memo_reader: None,
+            header,
+            fields_info,
+            encoding,
+            record_data_buffer,
+            field_data_buffer: [0u8; 255],
+            options: ReadingOptions::default(),
+            file_position: header.offset_to_first_record as u64,
+        })
+    }
+
+    /// Returns a reference to the record at the given index.
+    ///
+    /// Returns None if no record exist for the given index
+    pub fn record(&mut self, index: usize) -> Option<RecordRef<'_, T>> {
+        if index >= self.header.num_records as usize {
+            None
+        } else {
+            let record_ref = RecordRef {
+                file: self,
+                index: RecordIndex(index),
+            };
+            Some(record_ref)
+        }
+    }
+
+    /// Returns an iterator over the records in the file.
+    ///
+    /// Always starts at the first record
+    pub fn records(&mut self) -> FileRecordIterator<'_, T> {
+        FileRecordIterator {
+            file: self,
+            current_record: RecordIndex(0),
+        }
+    }
+
+    /// Returns true if it read from the source, false otherwise (used in tests).
+    fn ensure_record_has_been_read_into_buffer(
+        &mut self,
+        record_index: RecordIndex,
+    ) -> Result<bool, Error> {
+        let record_ref = RecordRef {
+            file: self,
+            index: record_index,
+        };
+        let start_of_record_pos = record_ref.position_in_source();
+        let end_of_record_pos = start_of_record_pos + u64::from(self.header.size_of_record);
+
+        if self.file_position > start_of_record_pos && self.file_position <= end_of_record_pos {
+            // If pos is in this range, then the record was already read into the buffer
+            return Ok(false);
+        }
+
+        if start_of_record_pos != self.file_position {
+            // Only call seek of the record we need to read
+            // is the just after the one we read last
+            self.file_position = self
+                .inner
+                .seek(SeekFrom::Start(start_of_record_pos))
+                .map_err(|e| Error::record(record_index, e))?;
+        }
+
+        self.inner
+            .read_exact(self.record_data_buffer.get_mut())
+            .map_err(|e| Error::record(record_index, e))?;
+        self.file_position += self.record_data_buffer.get_mut().len() as u64;
+        Ok(true)
+    }
+}
+
+impl<T: Write + Seek> File<T> {
+    pub fn create_new(mut dst: T, table_info: TableInfo) -> Result<Self, Error> {
+        write_header_parts(&mut dst, &table_info.header, &table_info.fields_info)?;
+        let record_size: usize = DELETION_FLAG_SIZE
+            + table_info
+                .fields_info
+                .iter()
+                .map(|i| i.field_length as usize)
+                .sum::<usize>();
+        let record_data_buffer = Cursor::new(vec![0u8; record_size]);
+        let file_position = table_info.header.offset_to_first_record as u64;
+        debug_assert_eq!(file_position, dst.stream_position().unwrap());
+        Ok(Self {
+            inner: dst,
+            memo_reader: None,
+            header: table_info.header,
+            fields_info: FieldsInfo {
+                inner: table_info.fields_info,
+            },
+            encoding: table_info.encoding,
+            record_data_buffer,
+            field_data_buffer: [0u8; 255],
+            options: ReadingOptions::default(),
+            file_position,
+        })
+    }
+
+    pub fn append_record<R>(&mut self, record: &R) -> Result<(), Error>
+    where
+        R: WritableRecord,
+    {
+        self.append_records(std::slice::from_ref(record))
+    }
+
+    pub fn append_records<R>(&mut self, records: &[R]) -> Result<(), Error>
+    where
+        R: WritableRecord,
+    {
+        if self
+            .header
+            .num_records
+            .overflowing_add(records.len() as u32)
+            .1
+        {
+            return Err(Error::record(
+                RecordIndex(self.num_records()),
+                ErrorKind::Message("Too many records (u32 overflow)".to_string()),
+            ));
+        }
+
+        let end_of_last_record = self.header.offset_to_first_record as u64
+            + (self.num_records() as u64 * self.header.size_of_record as u64);
+
+        self.inner
+            .seek(SeekFrom::Start(end_of_last_record))
+            .map_err(|error| Error::record(RecordIndex(self.num_records()), error))?;
+
+        for record in records {
+            let current_record_index = self.header.num_records + 1;
+
+            let mut field_writer = FieldWriter {
+                dst: &mut self.inner,
+                fields_info: &self.fields_info.inner,
+                next_index: FieldIndex(0),
+                field_buffer: &mut Cursor::new(&mut self.field_data_buffer),
+                encoding: &self.encoding,
+            };
+
+            field_writer.write_deletion_flag().map_err(|error| {
+                Error::deletion_flag(RecordIndex(current_record_index as usize), error)
+            })?;
+
+            record.write_using(&mut field_writer).map_err(|error| {
+                Error::from_field_error(RecordIndex(current_record_index as usize), error)
+            })?;
+
+            self.header.num_records = current_record_index;
+        }
+
+        self.sync_all()
+            .map_err(|error| Error::record(RecordIndex(self.num_records()), error))?;
+
+        Ok(())
+    }
+
+    pub fn sync_all(&mut self) -> std::io::Result<()> {
+        let current_pos = self.inner.stream_position()?;
+        self.inner.seek(SeekFrom::Start(0))?;
+        self.header.write_to(&mut self.inner)?;
+        self.inner.seek(SeekFrom::Start(current_pos))?;
+        Ok(())
+    }
+}
+
+impl File<bufrw::BufReaderWriter<std::fs::File>> {
+    pub fn open_with_options<P: AsRef<Path>>(
+        path: P,
+        options: std::fs::OpenOptions,
+    ) -> Result<Self, Error> {
+        let file = options.open(path).map_err(Error::header)?;
+        let source = bufrw::BufReaderWriter::new(file);
+        File::open(source)
+    }
+
+    /// Opens an existing dBase file in read only mode
+    pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let file = std::fs::File::open(path.as_ref()).map_err(Error::header)?;
+
+        let mut file = File::open(bufrw::BufReaderWriter::new(file))?;
+        if file.fields_info.at_least_one_field_is_memo() {
+            let p = path.as_ref();
+            let memo_type = file.header.file_type.supported_memo_type();
+            if let Some(mt) = memo_type {
+                let memo_path = p.with_extension(mt.extension());
+
+                let memo_file = std::fs::File::open(memo_path)
+                    .map_err(|error| Error::header(ErrorKind::ErrorOpeningMemoFile(error)))?;
+
+                let memo_reader = MemoReader::new(mt, bufrw::BufReaderWriter::new(memo_file))
+                    .map_err(Error::header)?;
+
+                file.memo_reader = Some(memo_reader);
+            }
+        }
+        Ok(file)
+    }
+
+    /// Opens an existing dBase file in write only mode
+    pub fn open_write_only<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let mut options = std::fs::OpenOptions::new();
+        options
+            .read(false)
+            .write(true)
+            .create(false)
+            .truncate(false);
+
+        File::open_with_options(path, options)
+    }
+
+    /// Opens an existing dBase file in read **and** write mode
+    pub fn open_read_write<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true).write(true).create(false).truncate(false);
+
+        File::open_with_options(path, options)
+    }
+
+    /// This function will create a file if it does not exist, and will truncate it if it does.
+    pub fn create<P: AsRef<Path>>(path: P, table_info: TableInfo) -> Result<Self, Error> {
+        let file = std::fs::File::create(path).map_err(Error::header)?;
+
+        File::create_new(bufrw::BufReaderWriter::new(file), table_info)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ensure_record_has_been_read_into_buffer() {
+        let mut file = crate::File::open_read_only("tests/data/stations.dbf").unwrap();
+
+        {
+            let mut record = file.record(0).unwrap();
+            let _ = record.read_field(crate::FieldIndex(0)).unwrap();
+            // Must return false, meaning it correctly understands the record 0 is in memory
+            assert!(
+                !file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(0))
+                    .unwrap()
+            );
+            assert!(
+                file.ensure_record_has_been_read_into_buffer(crate::RecordIndex(1))
+                    .unwrap()
+            );
+        }
+
+        {
+            let mut record = file.record(4).unwrap();
+            let _ = record.read_field(crate::FieldIndex(3)).unwrap();
+            // Must return false, meaning it correctly understands the record 4 is in memory
+            assert!(
+                !file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(4))
+                    .unwrap()
+            );
+            assert!(
+                file.ensure_record_has_been_read_into_buffer(crate::RecordIndex(1))
+                    .unwrap()
+            );
+        }
+
+        // Make sure writing a field still work with the ensure mechanism
+        {
+            let mut record = file.record(10).unwrap();
+            let value = record.read_field(crate::FieldIndex(2)).unwrap();
+            // Use record.file to avoid double borrow
+            assert!(
+                !record
+                    .file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(10))
+                    .unwrap()
+            );
+            record.write_field(crate::FieldIndex(2), &value).unwrap();
+            assert!(
+                !file
+                    .ensure_record_has_been_read_into_buffer(crate::RecordIndex(10))
+                    .unwrap()
+            );
+        }
+    }
+}

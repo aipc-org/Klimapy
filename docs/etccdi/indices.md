@@ -1,367 +1,294 @@
-# ETCCDI 操作文档
+# ETCCDI 极端气候指数
 
-## 导入方式
+`klimapy.etccdi` 根据逐日降水、日最高温、日最低温和日平均温计算极端气候指数。可以直接调用单个指标，也可以用 `compute_indices` 一次计算多项。输入和输出使用 `klimapy.native.Field`，批处理返回名称到 Field 的字典。
+
+## 快速开始
+
+### 从 NetCDF 读取并计算
 
 ```python
 from klimapy import etccdi
-```
-
-## 调用方式
-
-```python
-# 降水指标
-prcptot = etccdi.PRCPTOT(pr)
-rx5day = etccdi.RX5DAY(pr)
-
-# 温度指标
-fd = etccdi.FD(tn)
-tx90p = etccdi.TX90p(tx, baseline_years=(1981, 2010))
-```
-
-本文档介绍 `klimapy.etccdi` 模块的使用方法。
-
-## 1. 模块说明
-
-ETCCDI 用于计算极端气候指数，目前包含降水与温度两大类指标。
-
-降水指标主要包含 4 类：
-
-1. 基础降水指数：如 PRCPTOT、RX1DAY、CDD
-2. 固定阈值指数：如 R10mm_precipitation、R20mm_days、R50mm_intensity
-3. 百分位阈值指数：如 R95mm_precipitation、R99mm_days、R90mm_intensity
-4. 百分位降水占比指数：R95mm_ratio、R99mm_ratio、R90mm_ratio
-
-降水命名约定：
-
-1. `_precipitation`：降水总量
-2. `_days`：日数
-3. `_intensity`：强度
-
-## 2. 安装
-
-```bash
-pip install klimapy
-```
-
-## 3. 输入数据要求
-
-输入必须是 klimapy.native.Field，并满足：
-
-1. 必须包含 time 维度。
-2. 变量名需匹配对应指标：
-    - 降水类支持：pr、pre、precipitation、rain、prec、tp
-    - 温度类常用支持：tas、tasmax、tasmin、tmax、tmin、tx、tn、tg、temperature、temp、t2m
-3. 时间应为逐日数据；模块会自动进行鲁棒时间转换并验证逐日特征。
-4. 常见数据形状为 (time, lat, lon)。
-
-说明：
-
-通过 TimeAxis 保留 CF 原生日历；缺失的日历日期补为 NaN，重复、倒序和非日尺度日期报错。
-年度/月度结果默认要求 90% 的有效日，可通过 `min_valid_fraction` 调整。
-降水归一到 mm/day，温度归一到 degC；未知单位报错，无单位沿用旧输入约定。
-
-## 4. 批量计算
-
-```python
-result = etccdi.compute_indices(
-    pr, ['PRCPTOT', 'RX1DAY', 'CDD', 'R95mm_days'],
-    baseline_years=(1981, 2010), spatial_chunk_size=32,
-)
-```
-
-同一批次共用校验、年份切片和百分位阈值缓存。空间分块可控制原始日数据的工作集。
-支持 Field、Dataset 或 `pr/tx/tn/tg -> Field` 映射；DTR 需要 tx/tn 两个输入。
-
-## 5. 基准期参数说明（百分位类函数）
-
-百分位相关函数共同参数（降水与温度均适用）：
-
-1. pr 或 temp：klimapy.native.Field，目标时段逐日数据。
-2. baseline_pr：klimapy.native.Field 或 None，基准期降水数据（仅降水百分位函数使用）。
-3. baseline_years：tuple/list，基准期起止年份，格式为 (start_year, end_year)。
-
-关键规则：
-
-1. baseline_years 为必填语义，不能为空。
-2. baseline_years 必须长度为 2，且 start_year <= end_year。
-3. baseline_pr 为 None 时，会从 pr 中按 baseline_years 自动提取基准期。
-4. baseline_pr 不为 None 时，仍会按 baseline_years 再次筛选。
-
-## 6. 主要函数清单
-
-### 6.0 温度指数
-
-年尺度阈值日数：
-
-1. FD(tn)：霜冻日（TN < 0°C）
-2. SU(tx)：夏季日（TX > 25°C）
-3. ID(tx)：冰冻日（TX < 0°C）
-4. TR(tn)：热带夜（TN > 20°C）
-
-生长季与温度极值：
-
-1. GSL(tg, hemisphere='NH')：生长季长度
-2. TXx(tx)：月最高日最高温
-3. TNx(tn)：月最高日最低温
-4. TXn(tx)：月最低日最高温
-5. TNn(tn)：月最低日最低温
-
-百分位温度指标（5天滑动日序阈值）：
-
-1. TN10p(tn, baseline_years=(1961, 1990))
-2. TX10p(tx, baseline_years=(1961, 1990))
-3. TN90p(tn, baseline_years=(1961, 1990))
-4. TX90p(tx, baseline_years=(1961, 1990))
-5. WSDI(tx, baseline_years=(1961, 1990))
-6. CSDI(tn, baseline_years=(1961, 1990))
-
-温度日较差：
-
-1. DTR(tx, tn)：月尺度日较差（TX - TN）
-
-### 6.1 基础降水指数
-
-1. PRCPTOT(pr)：逐年湿日（≥1 mm）总降水量。
-2. R1mm_days(pr)：逐年湿日数（日降水 >= 1 mm）。
-3. SDII(pr)：逐年简单降水强度（湿日总降水 / 年湿日数）。
-4. RX1DAY(pr)：逐年最大日降水量。
-5. RX5DAY(pr)：逐年最大 5 日累计降水量。
-6. CDD(pr)：逐年最大连续干日数（< 1 mm）。
-7. CWD(pr)：逐年最大连续湿日数（>= 1 mm）。
-
-### 6.2 固定阈值指数
-
-总量类：
-
-1. R10mm_precipitation(pr)
-2. R20mm_precipitation(pr)
-3. R25mm_precipitation(pr)
-4. R50mm_precipitation(pr)
-
-日数类：
-
-1. R10mm_days(pr)
-2. R20mm_days(pr)
-3. R25mm_days(pr)
-4. R50mm_days(pr)
-
-强度类：
-
-1. R10mm_intensity(pr)
-2. R20mm_intensity(pr)
-3. R25mm_intensity(pr)
-4. R50mm_intensity(pr)
-
-比重类：
-
-1. R10mm_ratio(pr)
-2. R20mm_ratio(pr)
-3. R25mm_ratio(pr)
-4. R50mm_ratio(pr)
-
-含义：各阈值降水总量占全年总降水量的比重（0-1）。
-
-### 6.3 百分位阈值指数
-
-90 百分位：
-
-1. R90mm_precipitation(pr, baseline_pr=None, baseline_years=None)
-2. R90mm_days(pr, baseline_pr=None, baseline_years=None)
-3. R90mm_intensity(pr, baseline_pr=None, baseline_years=None)
-
-95 百分位：
-
-1. R95mm_precipitation(pr, baseline_pr=None, baseline_years=None)
-2. R95mm_days(pr, baseline_pr=None, baseline_years=None)
-3. R95mm_intensity(pr, baseline_pr=None, baseline_years=None)
-
-99 百分位：
-
-1. R99mm_precipitation(pr, baseline_pr=None, baseline_years=None)
-2. R99mm_days(pr, baseline_pr=None, baseline_years=None)
-3. R99mm_intensity(pr, baseline_pr=None, baseline_years=None)
-
-### 6.4 百分位降水占比指数
-
-1. R90mm_ratio(pr, baseline_pr=None, baseline_years=None)
-2. R95mm_ratio(pr, baseline_pr=None, baseline_years=None)
-3. R99mm_ratio(pr, baseline_pr=None, baseline_years=None)
-
-含义：超过对应百分位阈值的降水总量，占全年总降水量的比重（0-1）。
-
-## 7. 快速开始
-
-```python
 from klimapy.native import read_field
-from klimapy.etccdi import (
-    PRCPTOT, RX5DAY, CDD,
-    R20mm_days, R20mm_ratio,
-    R95mm_precipitation, R95mm_days, R95mm_ratio,
-    FD, SU, TN10p, TX90p, WSDI, DTR
-)
 
-# 读取日降水
 pr = read_field("pr_daily.nc", "pr")
 
-# 基础指数
-prcptot = PRCPTOT(pr)
-rx5day = RX5DAY(pr)
-cdd = CDD(pr)
+# 年湿日降水总量，单位 mm。
+annual_total = etccdi.PRCPTOT(pr)
+# 月最大连续 5 日累计降水，单位 mm。
+monthly_max = etccdi.Rx5day(pr, freq="MS")
 
-# 固定阈值指数
-r20d = R20mm_days(pr)
-r20_ratio = R20mm_ratio(pr)
-
-# 百分位类指数（必须给 baseline_years）
-r95p = R95mm_precipitation(pr, baseline_years=(1981, 2010))
-r95d = R95mm_days(pr, baseline_years=(1981, 2010))
-r95_ratio = R95mm_ratio(pr, baseline_years=(1981, 2010))
-
-# 读取温度（变量名示例）
-tx = read_field("tas_daily.nc", "tx")
-tn = read_field("tas_daily.nc", "tn")
-tg = read_field("tas_daily.nc", "tg")
-
-# 温度阈值类
-fd = FD(tn)
-su = SU(tx)
-
-# 温度百分位类
-tn10p = TN10p(tn, baseline_years=(1981, 2010))
-tx90p = TX90p(tx, baseline_years=(1981, 2010))
-wsdi = WSDI(tx, baseline_years=(1981, 2010))
-
-# 温度日较差
-dtr = DTR(tx, tn)
-
-# 保存
-prcptot.to_netcdf("PRCPTOT.nc")
-rx5day.to_netcdf("RX5DAY.nc")
-r95_ratio.to_netcdf("R95mm_ratio.nc")
-r20_ratio.to_netcdf("R20mm_ratio.nc")
-fd.to_netcdf("FD.nc")
-tn10p.to_netcdf("TN10p.nc")
-dtr.to_netcdf("DTR_monthly.nc")
+annual_total.to_netcdf("PRCPTOT.nc")
+monthly_max.to_netcdf("Rx5day_monthly.nc")
 ```
 
-## 8. 输出说明
+`read_field` 的第二个参数是文件中的变量名。指标函数接收已经读取的 Field；文件路径、变量选择、计算和保存分别完成。
 
-大部分函数返回 klimapy.native.Field，通常包含：
+### 不依赖外部文件的 Python 示例
 
-1. year 维度
-2. 空间维（如 lat、lon）
-3. 部分 attrs 元信息（不同函数详细程度不同）
-
-温度类补充：
-
-1. TXx/TNx/TXn/TNn/DTR 为月尺度输出（time 为月起始时间戳）。
-2. FD/SU/ID/TR/GSL/WSDI/CSDI 以及 TN10p/TX10p/TN90p/TX90p 为年尺度输出（year 维）。
-
-补充：
-
-1. 部分旧接口会跳过不足 30 天的年份；RX1DAY/RX5DAY/RXnday 按报告期有效日比例控制输出。
-2. 若全部年份都不满足条件，函数可能返回 None。
-
-## 9. 常见问题
-
-### 9.1 报错：输入数据必须包含 time 维度
-
-请确认输入为 Field 且包含 time。
-
-### 9.2 报错：无效的降水变量名
-
-请将变量重命名为支持名称之一，例如：
+下面构造两个完整非闰年的单格点日数据，可直接执行。实际研究应换为自己的观测或模式数据，并选择适合研究目的的基准期。
 
 ```python
-pr = ds["your_var"].rename("pr")
+import numpy as np
+from klimapy import etccdi
+from klimapy.native import Field
+
+ntime = 730  # 2001-01-01 至 2002-12-31
+coords = {"time": np.arange(ntime), "lat": [30.0], "lon": [110.0]}
+time_attrs = {"time": {"units": "days since 2001-01-01", "calendar": "standard"}}
+
+def daily_field(values, name, units):
+    return Field(
+        np.asarray(values, dtype=float).reshape(ntime, 1, 1),
+        ("time", "lat", "lon"), coords, {"units": units}, name, time_attrs,
+    )
+
+pr = daily_field(np.arange(ntime) % 20, "pr", "mm/day")
+tx = daily_field(25 + 10 * np.sin(np.arange(ntime) * 2 * np.pi / 365), "tasmax", "degC")
+tn = daily_field(tx.values.ravel() - 10, "tasmin", "degC")
+tg = daily_field((tx.values.ravel() + tn.values.ravel()) / 2, "tas", "degC")
+
+result = etccdi.compute_indices(pr, ["PRCPTOT", "R10mm", "Rx5day"])
+print(result["PRCPTOT"].coords["year"])  # [2001 2002]
+print(result["PRCPTOT"].values.shape)    # (2, 1, 1)
 ```
 
-### 9.3 报错：baseline_years 不能为空
+## 输入变量与单位
 
-百分位类函数必须显式传入 baseline_years，例如：
+| 输入 | 含义 | 常用文件变量名 | 推荐单位 |
+| --- | --- | --- | --- |
+| `pr` | 逐日降水量或日平均降水通量 | `pr`、`pre`、`precipitation` | `mm/day` |
+| `tx` | 日最高温 | `tasmax`、`tmax`、`tx` | `degC` 或 `K` |
+| `tn` | 日最低温 | `tasmin`、`tmin`、`tn` | `degC` 或 `K` |
+| `tg` | 日平均温 | `tas`、`t2m`、`tg` | `degC` 或 `K` |
+
+Field 必须包含 `time` 维和可解码的逐日时间坐标；空间维可以是格点或站点。时间可以是带 CF 单位和日历属性的数值，也可以是 Field 支持的日期坐标。计算输入应以 `time` 为首维，例如 `(time, lat, lon)` 或 `(time, station)`。更多数据入口见 [数据与快速开始](../getting-started/quickstart.md)。
+
+降水在计算前转换为 `mm/day`，例如 `kg m-2 s-1` 乘以 86400；温度 `K` 自动转为 `degC`。未知单位报错。缺失单位时沿用降水 `mm/day`、温度 `degC` 的约定，并在结果中记录 `units_assumed`；正式计算应明确填写单位。输入必须已经是日尺度，不会自动把小时数据聚合成日数据。
+
+单指标调用由所用函数决定变量含义，不要求 Field 的名字必须是固定别名。批处理从映射或 Dataset 中选择多个变量时使用下述输入键。
+
+## Python 调用与参数
+
+### 单指标
 
 ```python
-R95mm_precipitation(pr, baseline_years=(1981, 2010))
+fd = etccdi.FD(tn=tn, min_valid_fraction=0.9)
+r30 = etccdi.Rnnmm(pr=pr, threshold=30)
+rx7 = etccdi.RXnday(pr=pr, window=7, freq="YS")
+tx90 = etccdi.TX90p(tx=tx, baseline_years=(2001, 2002), bootstrap=True)
+dtr = etccdi.DTR(tx=tx, tn=tn)
 ```
 
-### 9.4 报错：未找到某基准期年的数据
+| 参数 | 类型与默认值 | 作用与适用范围 |
+| --- | --- | --- |
+| `min_valid_fraction` | `float = 0.9` | 所有指标；每格点报告期有效日比例下限，范围 0–1 |
+| `freq` | `"YS"` 或 `"MS"`；默认 `"YS"` | 仅 `RX1DAY`、`RX5DAY`、`RXnday` 及其别名；年或月汇总 |
+| `threshold` | `float = 10.0` | `Rnnmm`；有限且非负，单位 `mm/day`，比较关系为 ≥ |
+| `window` | `int = 5` | `RXnday`；正整数，连续累计天数 |
+| `baseline_years` | 两个整数，例如 `(1981, 2010)` | 含首尾年份；降水百分位指标必须给出，温度百分位及持续期指标默认 `(1961, 1990)` |
+| `baseline_pr` | `Field` 或 `None`；默认 `None` | 仅降水百分位指标；单独提供参考日降水，仍按 `baseline_years` 筛选 |
+| `bootstrap` | `bool = True` | 仅 `TN10p`、`TX10p`、`TN90p`、`TX90p`；基准期内逐年替换校正 |
+| `hemisphere` | `"NH"` 或 `"SH"`；默认 `"NH"` | `GSL`；北半球自然年或南半球 7 月至次年 6 月 |
 
-请检查数据年份覆盖范围，并确认 baseline_years 在可用年份内。
+`TXx`、`TNx`、`TXn`、`TNn`、`DTR` 固定输出月结果；其他未列出 `freq` 的指标固定输出年结果。不要向它们传入 `freq`、`slice_mode` 或季节参数。
 
-### 9.5 结果中出现较多 NaN
-
-可能原因：
-
-1. 基准期湿日样本不足（模块按湿日 >= 1 mm 计算阈值）
-2. 原始数据缺测较多
-3. 某些年份有效天数不足被跳过
-
-### 9.6 温度百分位指标报 dayofyear 对齐错误
-
-请确认输入是逐日数据，并避免手动删除时间坐标。当前实现已做 no-leap 日序映射与闰日处理。
-
-### 9.7 GSL 在南半球结果异常
-
-请确认 hemisphere 参数是否设置为 SH，且时间覆盖至少包含连续的 7 月到次年 6 月周期。
-
-## 10. 建议
-
-1. 先用 check_data 对输入进行预校验，尽早发现变量名和时间问题。
-2. 百分位分析建议固定基准期，并在不同实验中保持一致。
-3. 结果建议保存为 NetCDF，便于后续统计与绘图。
-4. 温度数据建议统一单位为 °C；若原始单位为 K，请先转换后再计算阈值类指标。
-
-
-
-
-
-## 11. 标准修订与参数化接口
-
-当前提供全部 27 项核心指标对应的计算入口；接口覆盖不等于已完成外部库逐项认证。
-保留原函数名，同时导出标准别名 `Rx1day`、`Rx5day`、`R10mm`、`R20mm`、`R95p`、`R99p`。
-本库 `R95pTOT`/`R99pTOT` 按 ETCCDI 定义为超百分位降水总量，单位 mm；
-不是 Climpact 同名的百分比贡献率。原 `*_ratio` 接口仍为全部降水分母、0–1 比例。
+### 批量计算
 
 ```python
-from klimapy.etccdi import Rnnmm, RXnday, Rx5day, TX90p, compute_indices
+results = etccdi.compute_indices(
+    {"pr": pr, "tx": tx, "tn": tn, "tg": tg},
+    indices=["PRCPTOT", "Rnnmm", "Rx5day", "TX90p", "DTR", "GSL"],
+    baseline_years=(2001, 2002),
+    min_valid_fraction=0.9,
+    index_options={
+        "Rnnmm": {"threshold": 30},
+        "Rx5day": {"freq": "MS"},
+        "TX90p": {"bootstrap": True},
+        "GSL": {"hemisphere": "NH"},
+    },
+)
 
-custom_days = Rnnmm(pr, threshold=30)       # >= 30 mm/day 的年日数
-max_7day = RXnday(pr, window=7)             # 年最大连续 7 日累计，单位 mm
-monthly_max = Rx5day(pr, freq='MS')        # 月最大连续 5 日累计
-warm_days = TX90p(tx, baseline_years=(1981, 2010), bootstrap=True)
+for name, field in results.items():
+    print(name, field.dims, field.attrs["units"])
+```
 
-result = compute_indices(
-    pr, ['Rnnmm', 'Rx5day'],
-    index_options={'Rnnmm': {'threshold': 30}, 'Rx5day': {'freq': 'MS'}},
+```python
+def compute_indices(
+    data,
+    indices=None,
+    *,
+    baseline_years=None,
+    min_valid_fraction=0.9,
+    spatial_chunk_size=None,
+    index_options=None,
+):
+    ...
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `data` | 单个 Field、原生 Dataset，或 `pr/tx/tn/tg → Field` 映射；混合降水和温度指标时推荐显式映射 |
+| `indices` | 指标名称列表，大小写与公开函数名一致；省略时计算 PRCPTOT、R1mm_days、SDII、RX1DAY、RX5DAY、CDD、CWD |
+| `baseline_years` | 本批次百分位指标的公共基准期 |
+| `index_options` | 每项指标的专用参数字典；单项 `baseline_years` 优先于批次公共值 |
+| `spatial_chunk_size` | 正整数或 None；按经纬网格的两个空间方向切块，例如 32 表示至多 32×32 格点；此时所有输入须为相同网格的 `(time, lat, lon)` Field |
+
+批处理变量键支持 `pr/pre/precip/precipitation/rain/prec/tp`、`tx/tasmax/tmax`、`tn/tasmin/tmin`、`tg/tas/t2m/tm`。DTR 需要 tx 与 tn 的维度、坐标和日历严格一致。混合指标不能用同一个 Field 代替不同物理变量。
+
+`index_options` 的键必须出现在 `indices` 中，参数必须属于相应函数。输入变量和全局 `min_valid_fraction` 不能在单项选项中覆盖。空间分块逐块计算，但已读取 Field 的原始数组仍驻留内存；它不是文件流式读取。
+
+## 指标速查
+
+表中 PR 为日降水，TX/TN/TG 为日最高/最低/平均温；湿日为 PR ≥ 1 mm/day。`Q10`、`Q90` 为温度逐日序百分位阈值，`P95`、`P99` 为基准期湿日降水百分位阈值。
+
+### 温度：16 项核心指标
+
+| Python 函数 | 计算定义 | 输出频率 | 单位 |
+| --- | --- | --- | --- |
+| `FD(tn)` | TN < 0°C 的日数 | 年 | days/year |
+| `SU(tx)` | TX > 25°C 的日数 | 年 | days/year |
+| `ID(tx)` | TX < 0°C 的日数 | 年 | days/year |
+| `TR(tn)` | TN > 20°C 的日数 | 年 | days/year |
+| `GSL(tg, hemisphere="NH")` | 首段连续至少 6 日 TG > 5°C 的开始日，到后半年首段连续至少 6 日 TG < 5°C 的开始日之间的天数 | 年 | days/year |
+| `TXx(tx)` | 日最高温的最大值 | 月 | degC |
+| `TNx(tn)` | 日最低温的最大值 | 月 | degC |
+| `TXn(tx)` | 日最高温的最小值 | 月 | degC |
+| `TNn(tn)` | 日最低温的最小值 | 月 | degC |
+| `TN10p(tn, baseline_years=...)` | 有效日中 TN < Q10 的百分数 | 年 | % |
+| `TX10p(tx, baseline_years=...)` | 有效日中 TX < Q10 的百分数 | 年 | % |
+| `TN90p(tn, baseline_years=...)` | 有效日中 TN > Q90 的百分数 | 年 | % |
+| `TX90p(tx, baseline_years=...)` | 有效日中 TX > Q90 的百分数 | 年 | % |
+| `WSDI(tx, baseline_years=...)` | 属于连续至少 6 日 TX > Q90 事件的总日数 | 年 | days/year |
+| `CSDI(tn, baseline_years=...)` | 属于连续至少 6 日 TN < Q10 事件的总日数 | 年 | days/year |
+| `DTR(tx, tn)` | 配对有效日 TX − TN 的平均值 | 月 | degC |
+
+GSL 在北半球仅在 7 月起查找低温结束事件；南半球以终止年份标记 7 月至次年 6 月的生长季，1 月起查找低温结束事件。没有满足条件的开始事件时为 0；已有开始事件但没有满足条件的结束事件时为 NaN。质量控制不通过时仍为 NaN。
+
+### 降水：11 项核心指标
+
+| Python 函数 | 计算定义 | 输出频率 | 单位 |
+| --- | --- | --- | --- |
+| `PRCPTOT(pr)` | 湿日 PR 之和 | 年 | mm |
+| `SDII(pr)` | 湿日 PR 之和 / 湿日数；无湿日为 NaN | 年 | mm/day |
+| `Rx1day(pr, freq="YS")` | 最大单日降水；原名 `RX1DAY` | 年或月 | mm |
+| `Rx5day(pr, freq="YS")` | 最大连续 5 日累计降水；原名 `RX5DAY` | 年或月 | mm |
+| `R10mm(pr)` | PR ≥ 10 mm/day 的日数 | 年 | days/year |
+| `R20mm(pr)` | PR ≥ 20 mm/day 的日数 | 年 | days/year |
+| `Rnnmm(pr, threshold=10)` | PR ≥ 指定阈值的日数 | 年 | days/year |
+| `CDD(pr)` | PR < 1 mm/day 的最长连续日数 | 年 | days/year |
+| `CWD(pr)` | PR ≥ 1 mm/day 的最长连续日数 | 年 | days/year |
+| `R95p(pr, baseline_years=...)` | 湿日中 PR > P95 的降水总量 | 年 | mm |
+| `R99p(pr, baseline_years=...)` | 湿日中 PR > P99 的降水总量 | 年 | mm |
+
+公开别名还有 `R95pTOT`、`R99pTOT`，分别调用 `R95p`、`R99p` 的总量实现；`R10mm`、`R20mm` 分别调用 `R10mm_days`、`R20mm_days`。`RXdday` 是 `RXnday` 的别名。
+
+### 自定义降水与扩展指标
+
+```python
+# 任意连续 n 日累计的最大值。
+rx7 = etccdi.RXnday(pr, window=7, freq="YS")
+# 固定阈值：总量、日数、平均强度、占比。
+r20_total = etccdi.R20mm_precipitation(pr)
+r20_days = etccdi.R20mm_days(pr)
+r20_intensity = etccdi.R20mm_intensity(pr)
+r20_ratio = etccdi.R20mm_ratio(pr)
+# 百分位阈值：在基准期湿日中计算第 95 百分位。
+r95_total = etccdi.R95mm_precipitation(pr, baseline_years=(2001, 2002))
+r95_days = etccdi.R95mm_days(pr, baseline_years=(2001, 2002))
+r95_intensity = etccdi.R95mm_intensity(pr, baseline_years=(2001, 2002))
+r95_ratio = etccdi.R95mm_ratio(pr, baseline_years=(2001, 2002))
+```
+
+| 接口族 | 阈值 | 后缀与结果 |
+| --- | --- | --- |
+| `R1mm_days` | ≥ 1 mm/day | 湿日数 |
+| `R10mm_*`、`R20mm_*`、`R25mm_*`、`R50mm_*` | ≥ 10/20/25/50 mm/day | `_precipitation` 总量 mm；`_days` 日数；`_intensity` 命中日平均强度 mm/day；`_ratio` 命中日降水 / 全部有效日降水 |
+| `R90mm_*`、`R95mm_*`、`R99mm_*` | > 湿日降水第 90/95/99 百分位 | 同上四种后缀；数字是百分位，不是固定毫米阈值 |
+
+比值结果为 0–1，分母包含小于 1 mm 的微量降水；需要百分数时对 `.values` 乘以 100。零分母或强度计算没有命中日时为 NaN。扩展指标不另计入 27 项核心指标。
+
+## 基准期与百分位计算
+
+### 选择基准期
+
+```python
+# 从输入中按包含首尾的年份范围选择参考样本。
+r95 = etccdi.R95p(pr, baseline_years=(2001, 2002))
+warm_days = etccdi.TX90p(tx, baseline_years=(2001, 2002), bootstrap=True)
+# 可以为降水单独提供参考 Field；其空间维与坐标须匹配目标数据。
+reference_pr = etccdi.select_baseline_period(pr, 2001, 2002)
+r95_with_reference = etccdi.R95p(
+    pr, baseline_pr=reference_pr, baseline_years=(2001, 2002),
 )
 ```
 
-- `RX1DAY`、`RX5DAY`、`RXnday` 的 `freq` 支持 `YS`（默认，year 维）或 `MS`（time 维）。
-- 连续降水窗口要求每天有效，先滚动后汇总，跨年/月窗口按结束日期归属。
-- CDD/CWD、WSDI/CSDI 沿用逐年切分连续事件的策略，跨年连续段不会合并；这与滚动降水不同。
-- TN10p/TX10p/TN90p/TX90p 默认启用基准期内逐年替换 bootstrap：剔除目标基准年，
-  逐个重复其余基准年，每次重新计算阈值和目标年的比例，最后平均比例。
-  基准期外使用完整基准期阈值。bootstrap 至少需要两个基准年；不进行随机抽样。
-- 温度百分位日数排除公历/365/366 日历的 2 月 29 日；360 日历保留该日。
-  各库闰日策略可能不同，跨库对照必须统一该策略。
-- `bootstrap=False` 保留一次性阈值计算方式，适用于明确不需要基准期内校正的实验。
-- 分位数采用 `median_unbiased`（Hyndman–Fan type 8），计算时请与参考结果统一分位数类型。
-- PRCPTOT 和 SDII 使用湿日（≥1 mm）降水和，不纳入 0–1 mm 的微量降水。
-- `index_options` 为每项指标指定参数；不能覆盖输入数组或全局有效日比例。
+输入时间范围须覆盖基准期首尾年份。内部缺失日期会补成 NaN，补齐日期不代表增加了有效参考样本；应另行检查参考期各年和各格点的样本覆盖。降水可使用 `baseline_pr`，温度指标从输入温度序列选择基准期。计算较短的目标时段时，应先在包含参考年份的完整温度序列上计算，再选择所需结果年份。
 
-方法依据：[ETCCDI 官方定义](https://etccdi.pacificclimate.org/list_27_indices.shtml)。
-bootstrap 替换步骤可与 [xclim 实现说明](https://xclim.readthedocs.io/en/stable/_modules/xclim/core/bootstrapping.html)对照。
-尚未完成与外部库所有指标、所有日历的数值交叉验证。
+### 阈值样本与比较关系
 
-## 输出与质量控制
+降水百分位使用每格点整个基准期的有效湿日样本，至少需要 10 个湿日；不按日序计算。温度百分位使用每个日序前后各 2 日的循环 5 日窗，合并基准期各年样本。两类分位数均采用 `median_unbiased`，即 Hyndman–Fan type 8。
 
-输入/输出为 Field；`compute_indices` 返回字段字典。
-年度维度名为 year；月度维度名为 time，其坐标为月初 YYYYMMDD 整数。
-读取年度坐标使用 `result.coords['year']`，读取数值使用 `result.values`。
-`Field.time`/`TimeAxis` 可解码 CF 或 YYYYMMDD 时间，保持时间的日历定义。
-温度月极值、月 DTR、百分位 type-8、闰日排除及年替代 bootstrap 按上述规则计算。
-与库同名指标比对时须统一时间频率、阈值关系和 bootstrap 策略。
+温度百分位计算在公历、365 日和 366 日日历中排除 2 月 29 日；360 日历保留其完整 360 日。百分比以有效且阈值可用的参与日为分母，乘以 100；报告期覆盖率仍以原始日历的日数判断。
 
-每格点在报告期内默认至少需要 90% 的有效日。月度结果以实际月份长度为分母，年度结果以对应日历年长度为分母；缺失日期补为 NaN，全缺失格点始终为 NaN。显式设 min_valid_fraction=0 可以研究短片段，但不能将片段结果解释为完整年度。
+百分位上阈值使用严格大于 `>`，下阈值使用严格小于 `<`；相等值不计入。固定降水阈值使用 `≥`，固定温度阈值使用指标表中的严格不等号。
 
-阈值计算前，降水归一为 mm/day，温度归一为 degC。支持常见降水通量与 Celsius/Kelvin 单位；未知单位会报错。缺失单位时采用降水 mm/day、温度 degC 的输入约定，并在结果属性记录假设。跨日累计或仪器重置需要先处理。
+### 基准期内校正与连续事件
+
+`TN10p`、`TX10p`、`TN90p`、`TX90p` 默认启用 bootstrap。对于基准期内某年，排除该年，再逐个重复其他参考年补足样本，重新计算阈值与该年的百分比，最终平均各次结果。至少需要两个参考年；这是逐年替换，不是随机抽样。基准期外使用完整参考样本的阈值。
+
+```python
+warm_days = etccdi.TX90p(tx, baseline_years=(2001, 2002), bootstrap=True)
+warm_days_no_bootstrap = etccdi.TX90p(tx, baseline_years=(2001, 2002), bootstrap=False)
+```
+
+`WSDI`、`CSDI` 当前使用一次性基准期阈值，连续长度固定为 6 日，不接受 `bootstrap` 或 `min_spell_length` 参数。
+
+`Rx5day`、`RXnday` 先在完整日序列滚动累计，再按窗口结束日期汇总，允许窗口跨月或跨年；窗口中任一日缺测则该窗口无效。CDD/CWD、WSDI/CSDI 在每个报告年内重新计算连续段，跨年事件在年界截断。缺失日期或值会中断连续事件。
+
+## 缺测、日历与质量控制
+
+重复日期、倒序时间或非日尺度时间报错；内部缺失日期补成 NaN。时间轴保留输入的 CF 日历，例如 `standard`、`noleap`、`all_leap` 和 `360_day`。
+
+每个格点独立检查报告期有效日数。默认要求至少占该日历完整年或月日数的 90%；不足时保留报告期位置，值为 NaN，不删除年份、不返回 None。DTR 按 TX/TN 配对有效日检查。
+
+```python
+strict_total = etccdi.PRCPTOT(pr, min_valid_fraction=1.0)
+relaxed_total = etccdi.PRCPTOT(pr, min_valid_fraction=0.8)
+```
+
+`min_valid_fraction=0` 可用于短片段诊断，但不能把部分年份的累计量解释为全年总量。全缺测格点始终为 NaN；百分位样本不足时，依赖该阈值的结果也为 NaN。
+
+## 输出与保存
+
+```python
+annual = etccdi.PRCPTOT(pr)
+monthly = etccdi.TXx(tx)
+print(annual.dims)                # ("year", "lat", "lon")
+print(annual.coords["year"])      # 年份整数
+print(monthly.coords["time"])     # 月初 YYYYMMDD 整数
+print(annual.attrs["units"])      # mm
+print(annual.values)              # NumPy 数组
+
+annual.to_netcdf("annual_total.nc")
+```
+
+`to_netcdf` 默认拒绝覆盖已存在的文件；重复运行时请选择新路径或先明确处理已有输出。
+
+年结果使用 `year` 维；月结果使用 `time` 维，坐标为月初的 YYYYMMDD 整数。空间维与坐标保留输入定义。多数指标记录单位、报告频率、有效日比例和 Rust 引擎；百分位结果还记录参考期与分位数方法，温度百分位结果记录闰日及 bootstrap 设置。GSL 记录单位与半球。
+
+## 常见问题
+
+| 问题 | 处理方式 |
+| --- | --- |
+| `baseline_years` 为空或参考年份缺失 | 给出覆盖实际数据的首尾年份；温度数据应同时包含参考期和目标期 |
+| 年/月结果为 NaN | 检查完整报告期的覆盖率、湿日样本数及输入单位；先区分缺测与真实零值 |
+| `Missing input for tx/tn/tg/pr` | 在批处理映射中使用对应输入键；DTR 同时提供 tx 和 tn |
+| `freq`、`slice_mode` 或其他参数报错 | 使用本页所列参数；仅滚动降水极值支持 `freq`，季节与任意频率暂不支持 |
+| 基准期内温度百分位很慢 | bootstrap 会重复估计阈值；先用小区域核验，再按空间分块；只有研究设计允许时才关闭校正 |
+| 大区域计算占内存 | 批处理可设 `spatial_chunk_size=32`；该选项减小计算块，不减少已读取输入数组的内存 |
+
+## 方法与接口参考
+
+本页按“数据输入、单指标、批量调用、时间频率、基准期、输出”的顺序组织，参考 [icclim 官方 Python API 文档](https://icclim.readthedocs.io/en/stable/references/icclim_index_api.html)。Klimapy 使用上文所列的 Field 接口和参数；无需安装或导入 icclim。
+
+科学定义参见 [ETCCDI 27 项指标](https://etccdi.pacificclimate.org/list_27_indices.shtml)。本页说明当前实现口径；外部库所有指标、日历和边界条件的完整数值交叉验证尚未完成。修订记录见 [指标覆盖与检查](coverage-audit.md)。

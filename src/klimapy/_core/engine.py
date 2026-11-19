@@ -1,17 +1,17 @@
 """Native BC/SD metadata, cached Rust plans, bounded buffers and atomic output."""
 
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import numpy as np
 
 from .._backends.rust import SpatialPlan
-from ..native import Dataset, Field
+from ..native import Dataset
 from .validation import (
-    normalize_time,
-    normalize_spatial,
     convert_units,
+    normalize_spatial,
+    normalize_time,
     validate_reference_years,
 )
 
@@ -106,6 +106,7 @@ class NetCDFWriter:
         time_name="time",
         lat_name="lat",
         lon_name="lon",
+        variable="pr",
     ):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -137,7 +138,7 @@ class NetCDFWriter:
                 )
                 v.write(np.asarray(coord))
             self.variable = self.handle.create_variable(
-                "pr",
+                variable,
                 (time_name, lat_name, lon_name),
                 (len(values), len(lat), len(lon)),
                 dtype="float32",

@@ -1,7 +1,9 @@
 # BCSD — Bias Correction and Spatial Downscaling
 
-- [BC — Bias Correction](bcsd/bias_correction.md)：偏差校正，返回粗网格校正结果字典。
-- [SD — Spatial Downscaling](bcsd/spatial_downscaling.md)：接收 BC 结果，降尺度到观测网格并保存 NetCDF。
+支持按 `variable` 区分降水和温度，联合温度入口可由最高温与日较差重建最低温，见[分变量策略与示例](bcsd/variables.md)。
+
+- [偏差校正函数](bcsd/bias_correction.md)：偏差校正，返回粗网格校正结果字典。
+- [空间降尺度函数](bcsd/spatial_downscaling.md)：接收 BC 结果，降尺度到观测网格并保存 NetCDF。
 
 ## 分阶段调用
 

@@ -1,0 +1,668 @@
+//! Module with the definition of fn's and struct's to read .dbf files
+
+use std::convert::TryFrom;
+use std::fs::File;
+use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::iter::FusedIterator;
+use std::path::Path;
+
+use crate::encoding::DynEncoding;
+use crate::error::{Error, ErrorKind, FieldError};
+use crate::field::types::{FieldType, FieldValue, TrimOption};
+use crate::field::{DeletionFlag, FieldInfo};
+use crate::header::Header;
+use crate::memo::{MemoFileType, MemoReader};
+use crate::{FieldConversionError, FieldIndex, Record, RecordIndex, file};
+
+/// Value of the byte between the last RecordFieldInfo and the first record
+pub(crate) const TERMINATOR_VALUE: u8 = 0x0D;
+
+pub(crate) const BACKLINK_SIZE: u16 = 263;
+
+/// Trait to be implemented by structs that represent records read from a
+/// dBase file.
+///
+/// The field iterator gives access to methods that allow to read fields value
+/// or skip them.
+/// It is not required that the user reads / skips all the fields in a record,
+/// in other words: it is not required to consume the iterator.
+pub trait ReadableRecord: Sized {
+    /// function to be implemented that returns a new instance of your type
+    /// using values read from the `FieldIterator'
+    fn read_using<Source, MemoSource>(
+        field_iterator: &mut FieldIterator<Source, MemoSource>,
+    ) -> Result<Self, FieldError>
+    where
+        Source: Read + Seek,
+        MemoSource: Read + Seek;
+}
+
+/// Structs containing the information allowing to
+/// create a new TableWriter which would write file
+/// with the same record structure as another dbase file.
+///
+/// You can get this by using [Reader::into_table_info].
+#[derive(Clone)]
+pub struct TableInfo {
+    pub(crate) header: Header,
+    pub(crate) fields_info: Vec<FieldInfo>,
+    pub(crate) encoding: DynEncoding,
+}
+
+/// Options related to reading
+#[derive(Copy, Clone, Debug)]
+pub struct ReadingOptions {
+    pub(crate) character_trim: TrimOption,
+}
+
+impl Default for ReadingOptions {
+    fn default() -> Self {
+        Self {
+            character_trim: TrimOption::BeginEnd,
+        }
+    }
+}
+
+impl ReadingOptions {
+    /// Customize how spaces ` ` are trimmed within [FieldValue::Character]
+    ///
+    /// By default they are trimmed at the beginning and the end
+    pub fn character_trim(mut self, trim_option: TrimOption) -> Self {
+        self.character_trim = trim_option;
+        self
+    }
+}
+
+/// Convenience builder to create a reader directly from file sources
+///
+/// # Example
+///
+/// ```
+/// use std::fs::File;
+///
+/// # fn main() -> Result<(), dbase::Error> {
+/// let dbf_path = "tests/data/line.dbf";
+/// let options = dbase::ReadingOptions::default()
+///     .character_trim(dbase::TrimOption::BeginEnd);
+///
+/// let mut reader = dbase::ReaderBuilder::new()
+///     .with_options(options)
+///     .with_encoding(dbase::encoding::UnicodeLossy)
+///     .open(dbf_path)
+///     .unwrap();
+///
+/// let records = reader.read()?;
+/// assert_eq!(records.len(), 1);
+/// # Ok(())
+/// # }
+/// ```
+pub struct ReaderBuilder {
+    encoding: Option<DynEncoding>,
+    options: Option<ReadingOptions>,
+}
+
+impl Default for ReaderBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ReaderBuilder {
+    pub fn new() -> Self {
+        Self {
+            encoding: None,
+            options: None,
+        }
+    }
+
+    pub fn with_encoding(mut self, encoding: impl Into<DynEncoding>) -> Self {
+        self.encoding = Some(encoding.into());
+
+        self
+    }
+
+    pub fn with_options(mut self, options: ReadingOptions) -> Self {
+        self.options = Some(options);
+
+        self
+    }
+
+    pub fn open<P>(self, path: P) -> Result<Reader<BufReader<File>>, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let p = path.as_ref();
+        let mut bufreader = File::open(p).map(BufReader::new).map_err(Error::header)?;
+
+        let (header, fields_info, encoding) = file::open_dbase(&mut bufreader, self.encoding)?;
+
+        let at_least_one_field_is_memo = fields_info
+            .iter()
+            .any(|f_info| f_info.field_type == FieldType::Memo);
+
+        let mut memo_reader = None;
+        if at_least_one_field_is_memo {
+            let memo_type = header.file_type.supported_memo_type();
+            if let Some(mt) = memo_type {
+                let memo_path = match mt {
+                    MemoFileType::DbaseMemo | MemoFileType::DbaseMemo4 => p.with_extension("dbt"),
+                    MemoFileType::FoxBaseMemo => p.with_extension("fpt"),
+                };
+
+                let memo_file = File::open(memo_path)
+                    .map_err(|error| Error::header(ErrorKind::ErrorOpeningMemoFile(error)))?;
+
+                memo_reader =
+                    Some(MemoReader::new(mt, BufReader::new(memo_file)).map_err(Error::header)?);
+            }
+        }
+
+        Ok(Reader {
+            source: bufreader,
+            memo_reader,
+            header,
+            fields_info: fields_info.inner,
+            encoding,
+            options: self.options.unwrap_or_default(),
+        })
+    }
+
+    pub fn build<T>(self, source: T) -> Result<Reader<T>, Error>
+    where
+        T: Read + Seek,
+    {
+        self.build_impl(source, None)
+    }
+
+    pub fn build_with_memo<T>(self, source: T, memo_source: T) -> Result<Reader<T>, Error>
+    where
+        T: Read + Seek,
+    {
+        self.build_impl(source, Some(memo_source))
+    }
+
+    fn build_impl<T>(self, mut source: T, memo_source: Option<T>) -> Result<Reader<T>, Error>
+    where
+        T: Read + Seek,
+    {
+        let (header, fields_info, encoding) = file::open_dbase(&mut source, self.encoding)?;
+        let memo_reader = if let Some(memo_source) = memo_source {
+            let memo_type = header.file_type.supported_memo_type();
+            if let Some(mt) = memo_type {
+                let memo_reader = MemoReader::new(mt, memo_source).map_err(Error::header)?;
+
+                Some(memo_reader)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(Reader {
+            source,
+            memo_reader,
+            header,
+            fields_info: fields_info.inner,
+            encoding,
+            options: self.options.unwrap_or_default(),
+        })
+    }
+}
+
+/// Struct with the handle to the source .dbf file
+/// Responsible for reading the content
+#[derive(Clone)]
+pub struct Reader<T> {
+    /// Where the data is read from
+    source: T,
+    memo_reader: Option<MemoReader<T>>,
+    header: Header,
+    fields_info: Vec<FieldInfo>,
+    encoding: DynEncoding,
+    options: ReadingOptions,
+}
+
+impl<T: Read + Seek> Reader<T> {
+    /// Creates a new reader from the source.
+    ///
+    /// Reads the header and fields information as soon as its created.
+    ///
+    /// Creating a reader from a file path using the [from_path](struct.Reader.html#method.from_path) is the prefered
+    /// way of doing it as it wraps the file in a BufReader for performance.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut reader = dbase::Reader::from_path("tests/data/line.dbf")?;
+    /// let records = reader.read()?;
+    /// # Ok(())
+    /// # }
+    ///
+    /// ```
+    ///
+    /// ```
+    /// use std::fs::File;
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let f = File::open("tests/data/line.dbf").unwrap();
+    /// let reader = dbase::Reader::new(f)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(source: T) -> Result<Self, Error> {
+        ReaderBuilder::new().build(source)
+    }
+
+    /// Returns the header of the file
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    /// Returns the fields contained in the opened file
+    pub fn fields(&self) -> &[FieldInfo] {
+        &self.fields_info
+    }
+
+    /// Creates an iterator of records of the type you want
+    pub fn iter_records_as<R: ReadableRecord>(&mut self) -> RecordIterator<'_, T, R> {
+        let record_size: usize = self
+            .fields_info
+            .iter()
+            .map(|i| i.field_length as usize)
+            .sum();
+        RecordIterator {
+            reader: self,
+            record_type: std::marker::PhantomData,
+            current_record: RecordIndex(0),
+            record_data_buffer: std::io::Cursor::new(vec![0u8; record_size]),
+            field_data_buffer: [0u8; 255],
+        }
+    }
+
+    /// Shortcut function to get an iterator over the [Records](struct.Record.html) in the file
+    pub fn iter_records(&mut self) -> RecordIterator<'_, T, Record> {
+        self.iter_records_as::<Record>()
+    }
+
+    /// Reads all the records of the file inside a `Vec`
+    pub fn read_as<R: ReadableRecord>(&mut self) -> Result<Vec<R>, Error> {
+        // We don't read the file terminator
+        self.iter_records_as::<R>()
+            .collect::<Result<Vec<R>, Error>>()
+    }
+
+    /// Make the `Reader` read the [Records](struct.Record.html)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::fs::File;
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut reader = dbase::Reader::from_path("tests/data/line.dbf")?;
+    /// let records = reader.read()?;
+    /// assert_eq!(records.len(), 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn read(&mut self) -> Result<Vec<Record>, Error> {
+        // We don't read the file terminator
+        self.iter_records().collect::<Result<Vec<Record>, Error>>()
+    }
+
+    /// Seek to the start of the record at `index`
+    pub fn seek(&mut self, index: usize) -> Result<(), Error> {
+        let offset = self.header.offset_to_first_record as usize
+            + (index * self.header.size_of_record as usize);
+        self.source
+            .seek(SeekFrom::Start(offset as u64))
+            .map_err(|err| Error::record(RecordIndex(index), err))?;
+        Ok(())
+    }
+
+    /// Consumes the reader, and returns the info that
+    /// allow to create a writer that would write a file
+    /// with the same structure.
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let mut reader = dbase::Reader::from_path("some_file.dbf")?;
+    /// let records = reader.read()?;
+    /// let table_info = reader.into_table_info();
+    /// let writer_1 = dbase::TableWriterBuilder::from_table_info(table_info.clone())
+    ///         .build_with_file_dest("new_file_1.dbf");
+    ///
+    /// let writer_2 = dbase::TableWriterBuilder::from_table_info(table_info)
+    ///         .build_with_file_dest("new_file_2.dbf");
+    /// # Ok(())
+    /// # }
+    ///
+    /// ```
+    pub fn into_table_info(self) -> TableInfo {
+        TableInfo {
+            header: self.header,
+            fields_info: self.fields_info,
+            encoding: self.encoding,
+        }
+    }
+}
+
+impl<T: Read + Seek> std::fmt::Debug for Reader<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reader")
+            .field("header", &self.header)
+            .field("fields_info", &self.fields_info)
+            .field("encoding", &self.encoding)
+            .field("options", &self.options)
+            .finish()
+    }
+}
+
+impl Reader<BufReader<File>> {
+    /// Creates a new dbase Reader from a path
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), dbase::Error> {
+    /// let reader = dbase::Reader::from_path("tests/data/line.dbf")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        ReaderBuilder::new().open(path)
+    }
+}
+
+/// Simple struct to wrap together the value with the name
+/// of the field it belongs to
+pub struct NamedValue<'a, T> {
+    /// Reference to the field name the value belongs to
+    pub name: &'a str,
+    /// The value
+    pub value: T,
+}
+
+/// Iterator over the fields in a dBase record
+///
+/// This iterator only iterates over the fields contained in one record.
+///
+/// When trying to read more fields than there are, an EndOfRecord error
+/// will be returned.
+pub struct FieldIterator<'a, Source, MemoSource> {
+    /// The source from where we read the data
+    pub(crate) source: &'a mut Source,
+    /// The fields that make the records
+    pub(crate) fields_info: &'a [FieldInfo],
+    /// The next field index that will be read
+    pub(crate) next_index: FieldIndex,
+    /// The source where the Memo field data is read
+    pub(crate) memo_reader: &'a mut Option<MemoReader<MemoSource>>,
+    /// Buffer where field data is stored
+    pub(crate) field_data_buffer: &'a mut [u8; 255],
+    /// The string encoding
+    pub(crate) encoding: &'a DynEncoding,
+    pub(crate) options: ReadingOptions,
+}
+
+impl<'a, Source: Read + Seek, MemoSource: Read + Seek> FieldIterator<'a, Source, MemoSource> {
+    /// Reads the next field and returns its name and value
+    pub fn read_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldError> {
+        self.read_next_field_x().map(|(value, _, info)| NamedValue {
+            name: &info.name,
+            value,
+        })
+    }
+
+    /// Reads the next field and tries to convert into the requested type
+    /// using [TryFrom]
+    pub fn read_next_field_as<F>(&mut self) -> Result<NamedValue<'a, F>, FieldError>
+    where
+        F: TryFrom<FieldValue, Error = FieldConversionError>,
+    {
+        self.read_next_field_x()
+            .and_then(|(value, index, info)| match F::try_from(value) {
+                Ok(v) => Ok(NamedValue {
+                    name: &info.name,
+                    value: v,
+                }),
+                Err(err) => Err(FieldError::from_info(index, info, err)),
+            })
+    }
+
+    /// Skips the next field of the record, useful if the field does not interest you
+    /// but the ones after do.
+    ///
+    /// Does nothing if the last field of the record was already skipped or read.
+    pub fn skip_next_field(&mut self) -> Result<(), FieldError> {
+        match self.fields_info.get(self.next_index.0) {
+            None => Ok(()),
+            Some(field_info) => {
+                self.source
+                    .seek(SeekFrom::Current(i64::from(field_info.field_length)))
+                    .map(|_| ())
+                    .map_err(|error| FieldError::from_info(self.next_index, field_info, error))?;
+
+                self.next_index.0 += 1;
+
+                Ok(())
+            }
+        }
+    }
+
+    /// Skips all the remaining field of the record
+    ///
+    /// used internally to make sure the data stream is at the right position
+    /// when we will start reading the next record
+    ///
+    /// Does nothing if the last field of the record was already skipped or read.
+    fn skip_remaining_fields(&mut self) -> Result<(), FieldError> {
+        let Some(size_to_skip) = self
+            .fields_info
+            .get(self.next_index.0..)
+            .map(|fields| fields.iter().map(|f| i64::from(f.field_length)).sum())
+        else {
+            return Ok(());
+        };
+
+        if size_to_skip == 0 {
+            return Ok(());
+        }
+
+        self.source
+            .seek(SeekFrom::Current(size_to_skip))
+            .map_err(|error| {
+                FieldError::from_info(self.next_index, &self.fields_info[self.next_index.0], error)
+            })?;
+
+        self.next_index.0 = self.fields_info.len() + 1;
+        Ok(())
+    }
+
+    /// Reads the raw bytes of the next field without doing any filtering or trimming
+    #[cfg(feature = "serde")]
+    pub(crate) fn read_next_field_raw(&mut self) -> Result<Vec<u8>, FieldError> {
+        let field_info = self
+            .fields_info
+            .get(self.next_index.0)
+            .ok_or_else(FieldError::end_of_record)?;
+        let mut buf = vec![0u8; field_info.field_length as usize];
+        self.source
+            .read_exact(&mut buf)
+            .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
+        self.next_index.0 += 1;
+        Ok(buf)
+    }
+
+    #[cfg(feature = "serde")]
+    pub(crate) fn peek_next_field(&mut self) -> Result<NamedValue<'a, FieldValue>, FieldError> {
+        let field_info = self
+            .fields_info
+            .get(self.next_index.0)
+            .ok_or_else(FieldError::end_of_record)?;
+        let field_data_buffer = &mut self.field_data_buffer[..field_info.length() as usize];
+        self.source
+            .read_exact(field_data_buffer)
+            .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
+        let value = FieldValue::read_from(
+            field_data_buffer,
+            self.memo_reader,
+            field_info,
+            self.encoding,
+            self.options.character_trim,
+        )
+        .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
+        self.source
+            .seek(SeekFrom::Current(-i64::from(field_info.field_length)))
+            .map_err(|e| FieldError::from_info(self.next_index, field_info, e))?;
+        Ok(NamedValue {
+            name: field_info.name(),
+            value,
+        })
+    }
+
+    fn read_next_field_x(&mut self) -> Result<(FieldValue, FieldIndex, &'a FieldInfo), FieldError> {
+        let field_info = self
+            .fields_info
+            .get(self.next_index.0)
+            .ok_or(FieldError::end_of_record())?;
+
+        let field_data_buffer = &mut self.field_data_buffer[..field_info.length() as usize];
+        self.source
+            .read_exact(field_data_buffer)
+            .map_err(|err| FieldError::from_info(self.next_index, field_info, err))?;
+
+        let result = FieldValue::read_from(
+            field_data_buffer,
+            self.memo_reader,
+            field_info,
+            self.encoding,
+            self.options.character_trim,
+        )
+        .map(|value| (value, self.next_index, field_info))
+        .map_err(|err| FieldError::from_info(self.next_index, field_info, err));
+        self.next_index.0 += 1;
+        result
+    }
+}
+
+impl<'a, Source: Read + Seek, MemoSource: Read + Seek> Iterator
+    for FieldIterator<'a, Source, MemoSource>
+{
+    type Item = Result<NamedValue<'a, FieldValue>, FieldError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.read_next_field() {
+            Err(error) => match error.kind {
+                ErrorKind::EndOfRecord => None,
+                _ => Some(Err(error)),
+            },
+            Ok(field_value) => Some(Ok(field_value)),
+        }
+    }
+}
+
+impl<Source: Read + Seek, MemoSource: Read + Seek> FusedIterator
+    for FieldIterator<'_, Source, MemoSource>
+{
+}
+
+/// Iterator over records contained in the dBase
+pub struct RecordIterator<'a, T, R> {
+    reader: &'a mut Reader<T>,
+    record_type: std::marker::PhantomData<R>,
+    current_record: RecordIndex,
+    record_data_buffer: std::io::Cursor<Vec<u8>>,
+    /// Non-Memo field length is stored on a u8,
+    /// so fields cannot exceed 255 bytes
+    field_data_buffer: [u8; 255],
+}
+
+impl<T: Read + Seek, R: ReadableRecord> Iterator for RecordIterator<'_, T, R> {
+    type Item = Result<R, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            return if self.current_record.0 >= self.reader.header.num_records as usize {
+                None
+            } else {
+                let deletion_flag = match DeletionFlag::read_from(&mut self.reader.source) {
+                    Ok(flag) => flag,
+                    Err(e) => {
+                        return Some(Err(Error::deletion_flag(self.current_record, e)));
+                    }
+                };
+
+                if deletion_flag == DeletionFlag::Deleted {
+                    // Skip the whole record
+                    if let Err(e) = self.reader.source.seek(SeekFrom::Current(
+                        self.record_data_buffer.get_ref().len() as i64,
+                    )) {
+                        return Some(Err(Error::record(self.current_record, e)));
+                    }
+                    self.current_record.0 += 1;
+                    continue;
+                }
+
+                if let Err(e) = self
+                    .reader
+                    .source
+                    .read_exact(self.record_data_buffer.get_mut())
+                {
+                    return Some(Err(Error::record(self.current_record, e)));
+                }
+                self.record_data_buffer.set_position(0);
+
+                let mut iter = FieldIterator {
+                    source: &mut self.record_data_buffer,
+                    fields_info: &self.reader.fields_info,
+                    next_index: FieldIndex(0),
+                    memo_reader: &mut self.reader.memo_reader,
+                    field_data_buffer: &mut self.field_data_buffer,
+                    encoding: &self.reader.encoding,
+                    options: self.reader.options,
+                };
+
+                let record = R::read_using(&mut iter)
+                    .and_then(|record| iter.skip_remaining_fields().and(Ok(record)))
+                    .map_err(|error| Error::from_field_error(self.current_record, error));
+                self.current_record.0 += 1;
+                Some(record)
+            };
+        }
+    }
+}
+
+/// One-liner to read the content of a .dbf file
+///
+/// # Example
+///
+/// ```
+/// let records = dbase::read("tests/data/line.dbf").unwrap();
+/// assert_eq!(records.len(), 1);
+/// ```
+pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Error> {
+    let mut reader = Reader::from_path(path)?;
+    reader.read()
+}
+
+#[cfg(test)]
+mod test {
+    use std::fs::File;
+    use std::io::Seek;
+
+    use super::*;
+
+    #[test]
+    fn pos_after_reading() {
+        let file = File::open("tests/data/line.dbf").unwrap();
+        let mut reader = Reader::new(file).unwrap();
+        let pos_after_reading = reader.source.stream_position().unwrap();
+
+        let mut expected_pos = Header::SIZE + ((reader.fields_info.len()) * FieldInfo::SIZE);
+        // Don't forget terminator
+        expected_pos += size_of::<u8>();
+
+        assert_eq!(pos_after_reading, expected_pos as u64);
+    }
+}

@@ -7,22 +7,6 @@ from ..native.geometry import polygon_mask
 from .._backends.rust import _library, _ptr, _DOUBLE, _BYTE, _SIZE, _check
 
 
-def _clip_data_array_by_shp(data_array, shp=None):
-    if shp is None or data_array is None:
-        return data_array
-    if not isinstance(data_array, Field) or data_array.dims != ("lat", "lon"):
-        raise ValueError("Spatial masks require a native (lat, lon) Field")
-    mask = polygon_mask(data_array.coords["lat"], data_array.coords["lon"], shp)
-    return Field(
-        np.where(mask, data_array.values, np.nan),
-        data_array.dims,
-        data_array.coords,
-        data_array.attrs,
-        data_array.name,
-        data_array.coordinate_attrs,
-    )
-
-
 def calculate_spatial_mean(
     data_array, method="arithmetic", include_zeros=False, shp=None
 ):

@@ -1,4 +1,6 @@
-# SD — Spatial Downscaling（空间降尺度）
+# 空间降尺度函数
+
+SD 从 BC 结果读取变量：pr 为乘法，绝对温度与 DTR 为加法；输出变量名和单位随变量变化，并附 QC，详见[分变量 BCSD](variables.md)。
 
 SD 是降水空间降尺度模块，将 BC 校正后的粗网格降水细化到观测网格。
 

@@ -16,3 +16,7 @@ include environment-comparison.yml
 
 prune outputs
 prune work
+
+include .cargo/config.toml
+graft rust/vendor-crates
+graft rust/licenses

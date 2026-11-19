@@ -12,13 +12,12 @@
 | ETCCDI | 聚合/计数、滚动最大、连续事件、type-8 百分位、温度比例/持续事件及 GSL |
 | 插值 | 双线性、球面最近邻、局部二次拟合、一阶/二阶球面矩形守恒权重与求值 |
 | 变率 | 季节异常、去趋势、年度标准差和覆盖率、年度相对趋势 |
-| SVD/EOF | 分解、权重处理、EOF 与重建 |
+| SVD/EOF | faer 紧致 SVD、权重处理、EOF 与重建 |
 | 空间工具 | 空间均值、Polygon/MultiPolygon 与孔洞掩膜、Float32 GeoTIFF 写出 |
 | 文件 | Rust 调用系统 libnetcdf 分块读写、压缩、缺测/打包解码 |
 
 Python 准备分组标签、参考期索引、bootstrap 年份组合并组织结果；重复样本百分位、
-各副本指标及最终均值仍调用 Rust。GeoJSON 使用标准库读取；Shapefile 及 CRS 转换
-使用可选的原生 GDAL C API，随后将 WGS84 几何交给 Rust 掩膜，不导入 Python GIS 库。
+各副本指标及最终均值仍调用 Rust。GeoJSON 使用标准库读取；Shapefile 几何使用 Rust shapefile 读取，原生 PROJ 直接转换 CRS，Rust geo 执行相交掩膜。其他矢量格式继续使用 GDAL，不导入 Python GIS 库。
 
 ## 构建与 ABI
 
@@ -74,3 +73,6 @@ MultiPolygon、孔洞和边界相交语义，不处理跨日期变更线的包�
 
 [验证说明](validation.md) 区分 Test 单元测试、真正安装包与 Test1 的 CN05.1 比对。
 真实数据不进 Git，也不随 wheel/sdist 发布。远程平台配置不等于已在这些平台验证。
+
+线性代数使用 faer 0.24.4（单线程 std/linalg），Rust 最低版本声明为 1.88（geo 0.33.1 要求）。
+完整迁移范围、兼容参数和计时见 [faer 迁移验收](faer-migration-2026-10-30.md)。

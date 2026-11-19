@@ -1,30 +1,79 @@
 """BCSD 一体化入口及旧导入路径；计算实现位于同一子包下的 BiasCorrection 和 SpatialDownscaling。"""
 
-from .bias_correction import BC, create_cdf_spline, close_result
 import logging
+
+from .bias_correction import (
+    BC,
+    close_result,
+)
+from .bias_correction import (
+    create_cdf_spline as create_cdf_spline,
+)
 
 logger = logging.getLogger(__name__)
 
-from .spatial_downscaling import SD, area_weighted_regrid, fft_smooth_three_harmonics
 from ..._core.common import (
-    WINDOW_SIZE,
-    N_QUANTILES,
-    MIN_PRECIP,
-    MAX_RATIO,
-    MIN_RATIO,
-    DEBUG_CHECK,
-    DEBUG_PRINT_SAMPLES,
-    calculate_bounds,
-    get_precip_var_name,
-    convert_precip_to_mm_day,
-    cftime_to_datetime,
-    parse_cftime_date,
-    detect_calendar_type,
-    calculate_doy,
-    _safe_min,
-    _safe_max,
-    _safe_mean,
-    print_array_diagnostics,
+    DEBUG_CHECK as DEBUG_CHECK,
+)
+from ..._core.common import (
+    DEBUG_PRINT_SAMPLES as DEBUG_PRINT_SAMPLES,
+)
+from ..._core.common import (
+    MAX_RATIO as MAX_RATIO,
+)
+from ..._core.common import (
+    MIN_PRECIP as MIN_PRECIP,
+)
+from ..._core.common import (
+    MIN_RATIO as MIN_RATIO,
+)
+from ..._core.common import (
+    N_QUANTILES as N_QUANTILES,
+)
+from ..._core.common import (
+    WINDOW_SIZE as WINDOW_SIZE,
+)
+from ..._core.common import (
+    _safe_max as _safe_max,
+)
+from ..._core.common import (
+    _safe_mean as _safe_mean,
+)
+from ..._core.common import (
+    _safe_min as _safe_min,
+)
+from ..._core.common import (
+    calculate_bounds as calculate_bounds,
+)
+from ..._core.common import (
+    calculate_doy as calculate_doy,
+)
+from ..._core.common import (
+    cftime_to_datetime as cftime_to_datetime,
+)
+from ..._core.common import (
+    convert_precip_to_mm_day as convert_precip_to_mm_day,
+)
+from ..._core.common import (
+    detect_calendar_type as detect_calendar_type,
+)
+from ..._core.common import (
+    get_precip_var_name as get_precip_var_name,
+)
+from ..._core.common import (
+    parse_cftime_date as parse_cftime_date,
+)
+from ..._core.common import (
+    print_array_diagnostics as print_array_diagnostics,
+)
+from .spatial_downscaling import (
+    SD,
+)
+from .spatial_downscaling import (
+    area_weighted_regrid as area_weighted_regrid,
+)
+from .spatial_downscaling import (
+    fft_smooth_three_harmonics as fft_smooth_three_harmonics,
 )
 
 
@@ -37,6 +86,7 @@ def bcsd(
     ref_start_year,
     ref_end_year,
     *,
+    variable="pr",
     strict=False,
     bc_options=None,
     sd_options=None,
@@ -55,7 +105,7 @@ def bcsd(
         model_name=model_name,
         ref_start_year=ref_start_year,
         ref_end_year=ref_end_year,
-        **dict(bc_options or {}, strict=strict),
+        **dict(bc_options or {}, strict=strict, variable=variable),
     )
 
     if not bc_result:
@@ -86,6 +136,8 @@ def bcsd(
         "model_name": model_name,
         "hist_bcsd_path": sd_result["hist_bcsd_path"],
         "fut_bcsd_path": sd_result["fut_bcsd_path"],
+        "variable": variable,
+        "diagnostics": sd_result["diagnostics"],
     }
 
 

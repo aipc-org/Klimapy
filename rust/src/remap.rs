@@ -177,8 +177,7 @@ pub unsafe extern "C" fn kl_remap_new(
                         design.extend([1.0, dx, dy, dx * dy, dx * dx, dy * dy]);
                     }
                 }
-                let Ok((u, singular, vt)) = crate::linalg::decompose(&design, 9, 6, 1e-14, 100)
-                else {
+                let Ok((u, singular, vt)) = crate::linalg::decompose(&design, 9, 6) else {
                     return std::ptr::null_mut();
                 };
                 for k in 0..9 {

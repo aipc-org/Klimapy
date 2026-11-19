@@ -1,0 +1,3 @@
+
+# Preserve Cargo vendor checksums across Windows/Linux checkouts.
+rust/vendor-crates/** -text

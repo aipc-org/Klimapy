@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "output_dir": "../../outputs/recipe-monthly-evaluation",
+  "steps": [
+    {
+      "id": "model",
+      "operation": "load",
+      "paths": ["../../data/model-daily.nc"],
+      "variable": "pr",
+      "qc": {"valid_min": 0}
+    },
+    {
+      "id": "reference",
+      "operation": "load",
+      "paths": ["../../data/reference-daily.nc"],
+      "variable": "pr",
+      "qc": {"valid_min": 0}
+    },
+    {
+      "id": "model_monthly",
+      "operation": "aggregate",
+      "source": "model",
+      "parameters": {"frequency": "monthly", "operation": "mean"}
+    },
+    {
+      "id": "reference_monthly",
+      "operation": "aggregate",
+      "source": "reference",
+      "parameters": {"frequency": "monthly", "operation": "mean"}
+    },
+    {
+      "id": "monthly_scores",
+      "operation": "evaluate",
+      "source": "model_monthly",
+      "reference": "reference_monthly"
+    }
+  ]
+}

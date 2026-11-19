@@ -3,10 +3,21 @@
 from . import bias_correction, spatial_downscaling, workflow
 from .bias_correction import BC, bias_correct, close_result
 from .spatial_downscaling import SD, downscale
+from .temperature import bcsd_temperatures, reconstruct_minimum, temperature_range
 from .workflow import bcsd
 
 BiasCorrection = bias_correction
 SpatialDownscaling = spatial_downscaling
 BiasCorrectionSpatialDownscaling = workflow
 BCSD = workflow
-__all__ = ["bcsd", "bias_correct", "downscale", "BC", "SD", "close_result"]
+__all__ = [
+    "BC",
+    "SD",
+    "bcsd",
+    "bcsd_temperatures",
+    "bias_correct",
+    "close_result",
+    "downscale",
+    "reconstruct_minimum",
+    "temperature_range",
+]

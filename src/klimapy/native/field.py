@@ -4,9 +4,9 @@ Calendar decoding is metadata work. Numeric climate algorithms remain in Rust.
 This is not an xarray implementation: use explicit indexing and coordinates.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
-import re
 
 import numpy as np
 
@@ -105,7 +105,8 @@ class TimeAxis:
     values: np.ndarray
     attrs: dict = field(default_factory=dict)
 
-    def dates(self):
+    def serial(self):
+        """Absolute fractional calendar days, without daily-axis validation."""
         values = np.asarray(self.values)
         if values.ndim != 1 or not len(values):
             raise ValueError("Time must be a nonempty 1-D coordinate")
@@ -116,7 +117,7 @@ class TimeAxis:
             match = re.fullmatch(
                 r"(days?|hours?|minutes?|seconds?) since (\d{1,4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?)?(?:\s*(?:Z|\+00:00))?",
                 units.strip(),
-                re.I,
+                re.IGNORECASE,
             )
             if not match:
                 if (
@@ -128,7 +129,7 @@ class TimeAxis:
                         f"{int(n) // 10000:04d}-{int(n) // 100 % 100:02d}-{int(n) % 100:02d}"
                         for n in values
                     ]
-                    return TimeAxis(np.asarray(text), {"calendar": cal}).dates()
+                    return TimeAxis(np.asarray(text), {"calendar": cal}).serial()
                 raise ValueError(
                     "Numeric time needs CF units or YYYYMMDD integer dates"
                 )
@@ -170,6 +171,11 @@ class TimeAxis:
             serial = np.asarray(dates, dtype=float)
         if not np.isfinite(serial).all():
             raise ValueError("Time must be finite")
+        return serial
+
+    def dates(self):
+        serial = self.serial()
+        cal = self.calendar
         delta = np.diff(serial)
         if np.any(delta < 1 - 1e-8) or np.any(np.abs(delta - np.round(delta)) > 1e-8):
             raise ValueError(
@@ -204,6 +210,7 @@ class Field:
     attrs: dict = field(default_factory=dict)
     name: str = "value"
     coordinate_attrs: dict = field(default_factory=dict)
+    time_bounds: np.ndarray = None
 
     def __post_init__(self):
         self.values = np.asarray(self.values)
@@ -218,6 +225,36 @@ class Field:
         for dim, size in zip(self.dims, self.values.shape):
             if self.coords[dim].shape != (size,):
                 raise ValueError("Coordinate length differs from dimension: " + dim)
+
+        if self.time_bounds is not None:
+            self.time_bounds = np.asarray(self.time_bounds, dtype=float)
+            if "time" not in self.dims or self.time_bounds.shape != (
+                len(self.coords["time"]),
+                2,
+            ):
+                raise ValueError("time_bounds must have shape (time, 2)")
+            if "since" not in str(
+                self.coordinate_attrs.get("time", {}).get("units", "")
+            ).lower():
+                raise ValueError("time_bounds require numeric CF time units")
+            bounds = (
+                TimeAxis(
+                    self.time_bounds.ravel(), self.coordinate_attrs.get("time", {})
+                )
+                .serial()
+                .reshape(-1, 2)
+            )
+            clock = self.time.serial()
+            if (
+                np.any(bounds[:, 1] <= bounds[:, 0])
+                or np.any(bounds[1:, 0] < bounds[:-1, 1])
+                or np.any(clock < bounds[:, 0])
+                or np.any(clock > bounds[:, 1])
+            ):
+                raise ValueError(
+                    "Time bounds must be ordered, nonoverlapping and contain timestamps"
+                )
+            self.coordinate_attrs.setdefault("time", {})["bounds"] = "time_bnds"
 
     def __array__(self, dtype=None, copy=None):
         return (
@@ -259,6 +296,9 @@ class Field:
             self.attrs,
             self.name,
             {d: self.coordinate_attrs.get(d, {}) for d in dims},
+            None
+            if self.time_bounds is None or "time" not in dims
+            else self.time_bounds[indexers.get("time", slice(None))],
         )
 
     def to_netcdf(self, path):
@@ -273,9 +313,20 @@ class Field:
                     dim,
                     (dim,),
                     (len(coordinate),),
-                    attrs=self.coordinate_attrs.get(dim, {}),
+                    attrs={
+                        k: v
+                        for k, v in self.coordinate_attrs.get(dim, {}).items()
+                        if k != "bounds"
+                        or (dim == "time" and self.time_bounds is not None)
+                    },
                 )
                 v.write(coordinate)
+            if self.time_bounds is not None:
+                if self.name == "time_bnds" or "bnds" in self.dims:
+                    raise ValueError("Reserved bounds names conflict with field")
+                ds.create_variable(
+                    "time_bnds", ("time", "bnds"), self.time_bounds.shape
+                ).write(self.time_bounds)
             v = ds.create_variable(self.name, self.dims, self.shape, attrs=self.attrs)
             v.write(self.values)
 
@@ -285,7 +336,8 @@ def read_field(path, variable=None, *, indexers=None):
     with Dataset(path) as ds:
         names = ds.names()
         if variable is None:
-            choices = [n for n in names if ds[n].dims != (n,)]
+            bounds_names = {ds[n].attrs.get("bounds") for n in names}
+            choices = [n for n in names if ds[n].dims != (n,) and n not in bounds_names]
             if len(choices) != 1:
                 raise ValueError("Specify variable; candidates: " + str(choices))
             variable = choices[0]
@@ -306,4 +358,19 @@ def read_field(path, variable=None, *, indexers=None):
             except OSError:
                 raise ValueError("Missing coordinate variable: " + d) from None
             coords[d], attrs[d] = c[index], c.attrs
-        return Field(values, tuple(dims), coords, v.attrs, variable, attrs)
+        bounds = None
+        if "time" in dims and attrs["time"].get("bounds"):
+            bound_variable = ds[attrs["time"]["bounds"]]
+            if (
+                bound_variable.dims[0] != "time"
+                or len(bound_variable.shape) != 2
+                or bound_variable.shape[1] != 2
+            ):
+                raise ValueError("CF time bounds must use (time, two_vertices)")
+            for key in ("units", "calendar"):
+                if key in bound_variable.attrs and bound_variable.attrs[key] != attrs[
+                    "time"
+                ].get(key, "standard" if key == "calendar" else None):
+                    raise ValueError("Time bounds metadata must match time coordinate")
+            bounds = bound_variable[(selectors.get("time", slice(None)), slice(None))]
+        return Field(values, tuple(dims), coords, v.attrs, variable, attrs, bounds)

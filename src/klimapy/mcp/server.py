@@ -298,7 +298,7 @@ class ClimateServer:
                 {
                     "protocolVersion": protocol if protocol in SUPPORTED else PROTOCOL,
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "klimapy", "version": "1.2.1"},
+                    "serverInfo": {"name": "klimapy", "version": "1.3.0"},
                 },
             )
         if not self.initialized:

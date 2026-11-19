@@ -15,10 +15,21 @@ _ALIASES = {
 }
 
 
-class PrecipSource:
+class ClimateSource:
     """Own a native file until close; materialize only requested time/space blocks."""
 
-    def __init__(self, source):
+    def __init__(self, source, variable="pr"):
+        variables = {
+            "pr": (PRECIP_NAMES, "precip"),
+            "tas": (("tas", "tm", "tmean", "tg"), "temperature"),
+            "tasmax": (("tasmax", "tmax", "tx"), "temperature"),
+            "tasmin": (("tasmin", "tmin", "tn"), "temperature"),
+            "dtr": (("dtr",), "temperature_difference"),
+        }
+        if variable not in variables:
+            raise ValueError("Supported BCSD variables: pr, tas, tasmax, tasmin, dtr")
+        self.name = variable
+        aliases, kind = variables[variable]
         self.handle = None
         try:
             if isinstance(source, Field):
@@ -31,9 +42,9 @@ class PrecipSource:
                 self.handle = Dataset(source)
                 names = self.handle.names()
                 lookup = {n.lower(): n for n in names}
-                name = next((lookup[n] for n in PRECIP_NAMES if n in lookup), None)
+                name = next((lookup[n] for n in aliases if n in lookup), None)
                 if name is None:
-                    raise ValueError("No precipitation variable: " + str(names))
+                    raise ValueError("No matching climate variable: " + str(names))
                 self.variable = self.handle[name]
                 self.field = None
                 self.dims = tuple(_ALIASES.get(d, d) for d in self.variable.dims)
@@ -52,11 +63,14 @@ class PrecipSource:
                 self.coords["time"], self.coordinate_attrs.get("time", {})
             )
             self.time.dates()
+            if variable != "pr" and not self.attrs.get("units"):
+                raise ValueError("Temperature BCSD requires explicit units")
             # Unit scaling is metadata policy, evaluated by the Rust affine kernel.
             probe = Field(
                 np.array([0.0, 1.0]), ("probe",), {"probe": [0, 1]}, self.attrs
             )
-            converted = convert_units(probe, "precip")
+            converted = convert_units(probe, kind)
+            self.offset = float(converted.values[0])
             self.scale = float(converted.values[1] - converted.values[0])
             self.converted_attrs = converted.attrs
         except Exception:
@@ -95,7 +109,7 @@ class PrecipSource:
             values = values.transpose([remaining.index(d) for d in canonical])
             for d, indices in takes.items():
                 values = np.take(values, indices, axis=canonical.index(d))
-        return affine(values, self.scale)
+        return affine(values, self.scale, self.offset)
 
     def result(self, values):
         return Field(
@@ -103,7 +117,7 @@ class PrecipSource:
             ("time", "lat", "lon"),
             self.coords,
             self.converted_attrs,
-            "pr",
+            self.name,
             self.coordinate_attrs,
         )
 
@@ -119,4 +133,11 @@ class PrecipSource:
 
 
 def open_precip_dataset(path):
-    return PrecipSource(path)
+    return ClimateSource(path, "pr")
+
+
+PrecipSource = ClimateSource
+
+
+def open_climate_dataset(path, variable="pr"):
+    return ClimateSource(path, variable)

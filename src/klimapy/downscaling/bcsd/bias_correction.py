@@ -1,31 +1,31 @@
 """Calendar-aligned precipitation quantile correction using Rust FITPACK."""
 
 import logging
-from pathlib import Path
 from contextlib import ExitStack
+from pathlib import Path
 
 import numpy as np
 
-from ...native import Field, TimeAxis
-from ...native.correction import Transfer
-from ..._core.common import WINDOW_SIZE, N_QUANTILES
-from ..._core.native_adapter import open_precip_dataset
+from ..._core.common import N_QUANTILES, WINDOW_SIZE
 from ..._core.engine import (
-    calendar_info,
-    align_reference,
-    mapped_days,
     GridWeights,
+    align_reference,
     allocate,
+    calendar_info,
+    mapped_days,
 )
+from ..._core.native_adapter import open_climate_dataset
+from ...native import TimeAxis
+from ...native.correction import Transfer
 
 logger = logging.getLogger(__name__)
 DEBUG_CHECK = False
-__all__ = ["BC", "create_cdf_spline", "close_result"]
+__all__ = ["BC", "close_result", "create_cdf_spline"]
 
 
-def create_cdf_spline(gcm_data, obs_data, n_quantiles=50):
+def create_cdf_spline(gcm_data, obs_data, n_quantiles=50, *, nonnegative=True):
     try:
-        return Transfer(gcm_data, obs_data, n_quantiles)
+        return Transfer(gcm_data, obs_data, n_quantiles, nonnegative=nonnegative)
     except ValueError as exc:
         if "20 finite observations" in str(exc):
             return None
@@ -40,6 +40,7 @@ def bias_correct(
     ref_start_year,
     ref_end_year,
     *,
+    variable="pr",
     strict=False,
     time_chunk_size=128,
     work_dir=None,
@@ -66,7 +67,7 @@ def bias_correct(
             )
         with ExitStack() as stack:
             obs, historical, future = [
-                stack.enter_context(open_precip_dataset(p))
+                stack.enter_context(open_climate_dataset(p, variable))
                 for p in (obs_path, gcm_hist_path, gcm_fut_path)
             ]
             for d in ("lat", "lon"):
@@ -127,6 +128,9 @@ def bias_correct(
                 "approximate_functions": 0,
                 "reference_period": [ref_start_year, ref_end_year],
                 "calendar": cal,
+                "variable": variable,
+                "nonnegative_quantile_mapping": variable in ("pr", "dtr"),
+                "detrended": False,
             }
             for row in range(historical.shape[1]):
                 histrow, futrow = historical.read(lat=row), future.read(lat=row)
@@ -137,7 +141,10 @@ def bias_correct(
                     train = histrow[hi, col]
                     for day, indices in windows.items():
                         function = create_cdf_spline(
-                            train[indices], reference[indices, row, col], quantiles
+                            train[indices],
+                            reference[indices, row, col],
+                            quantiles,
+                            nonnegative=variable in ("pr", "dtr"),
                         )
                         stats[
                             "fitted_functions"
@@ -164,8 +171,8 @@ def bias_correct(
                             if function is not None:
                                 function.close()
             answer = {
-                "corrected_hist_pr": historical.result(outputs[0]),
-                "corrected_fut_pr": future.result(outputs[1]),
+                f"corrected_hist_{variable}": historical.result(outputs[0]),
+                f"corrected_fut_{variable}": future.result(outputs[1]),
                 "calendar_type": cal,
                 "max_doy": ndays,
                 "gcm_time_coord": "time",
@@ -174,9 +181,13 @@ def bias_correct(
                 "original_hist_path": str(gcm_hist_path),
                 "original_fut_path": str(gcm_fut_path),
                 "model_name": model_name,
+                "variable": variable,
                 "diagnostics": stats,
             }
-            for array in (answer["corrected_hist_pr"], answer["corrected_fut_pr"]):
+            for array in (
+                answer[f"corrected_hist_{variable}"],
+                answer[f"corrected_fut_{variable}"],
+            ):
                 array.attrs["calibration_period"] = f"{ref_start_year}-{ref_end_year}"
             _release(reference, remove=True)
             return answer
@@ -204,7 +215,9 @@ def _release(values, *, remove=False):
 
 def close_result(result, *, remove_work_files=False):
     if result:
-        for key in ("corrected_hist_pr", "corrected_fut_pr"):
+        for key in [
+            k for k in result if k.startswith(("corrected_hist_", "corrected_fut_"))
+        ]:
             if key in result:
                 _release(result[key].values, remove=remove_work_files)
 

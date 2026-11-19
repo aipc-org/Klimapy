@@ -1,0 +1,954 @@
+{
+  "checked_on": "2026-10-29",
+  "crates": [
+    {
+      "name": "faer",
+      "version": "0.24.4",
+      "license": "MIT",
+      "rust_version": "1.84.0",
+      "released_at": "2026-06-24T20:47:33.011573Z",
+      "repository": "https://codeberg.org/sarah-quinones/faer",
+      "documentation": "https://docs.rs/faer/0.24.4/",
+      "features": {
+        "default": [
+          "std",
+          "rayon",
+          "sparse-linalg",
+          "rand",
+          "npy"
+        ],
+        "linalg": [],
+        "nightly": [
+          "pulp/x86-v4",
+          "gemm/x86-v4",
+          "nano-gemm/x86-v4"
+        ],
+        "npy": [
+          "std",
+          "dep:npyz"
+        ],
+        "perf-warn": [
+          "dep:log"
+        ],
+        "rand": [
+          "num-complex/rand",
+          "dep:rand",
+          "dep:rand_distr"
+        ],
+        "rayon": [
+          "dep:rayon",
+          "gemm/rayon",
+          "private-gemm-x86?/rayon",
+          "dep:spindle"
+        ],
+        "sparse": [],
+        "sparse-linalg": [
+          "sparse",
+          "linalg"
+        ],
+        "std": [
+          "faer-traits/std",
+          "pulp/std",
+          "gemm/std",
+          "nano-gemm/std",
+          "libm/arch",
+          "dep:private-gemm-x86"
+        ],
+        "unstable": []
+      },
+      "source": "https://crates.io/api/v1/crates/faer",
+      "area": "稠密线性代数",
+      "priority": "首选",
+      "klimapy_use": "替换 SVD/EOF 分解内核",
+      "integration_status": "researched_not_integrated",
+      "selection": "selected_for_next_implementation",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "nalgebra",
+      "version": "0.35.0",
+      "license": "Apache-2.0",
+      "rust_version": "1.89.0",
+      "released_at": "2026-05-24T16:12:14.939059Z",
+      "repository": "https://github.com/dimforge/nalgebra",
+      "documentation": "https://docs.rs/nalgebra/0.35.0/",
+      "features": {
+        "alloc": [],
+        "arbitrary": [
+          "quickcheck"
+        ],
+        "compare": [
+          "matrixcompare-core"
+        ],
+        "convert-bytemuck": [
+          "bytemuck",
+          "num-complex/bytemuck"
+        ],
+        "convert-glam030": [
+          "glam030"
+        ],
+        "convert-glam031": [
+          "glam031"
+        ],
+        "convert-glam032": [
+          "glam032"
+        ],
+        "convert-glam033": [
+          "glam033"
+        ],
+        "convert-mint": [
+          "mint"
+        ],
+        "debug": [
+          "approx/num-complex",
+          "rand"
+        ],
+        "default": [
+          "std",
+          "macros"
+        ],
+        "io": [
+          "pest",
+          "pest_derive"
+        ],
+        "libm": [
+          "simba/libm",
+          "glam030?/libm",
+          "glam031?/libm",
+          "glam032?/libm",
+          "glam033?/libm"
+        ],
+        "libm-force": [
+          "simba/libm_force"
+        ],
+        "macros": [
+          "nalgebra-macros"
+        ],
+        "proptest-support": [
+          "proptest"
+        ],
+        "rand": [
+          "rand-no-std",
+          "rand-package/std",
+          "rand-package/std_rng",
+          "rand-package/thread_rng",
+          "rand_distr"
+        ],
+        "rand-no-std": [
+          "rand-package"
+        ],
+        "rkyv-safe-deser": [
+          "rkyv-serialize",
+          "rkyv/validation"
+        ],
+        "rkyv-serialize": [
+          "rkyv-serialize-no-std",
+          "rkyv/std",
+          "rkyv/validation"
+        ],
+        "rkyv-serialize-no-std": [
+          "rkyv/size_32"
+        ],
+        "serde-serialize": [
+          "serde-serialize-no-std",
+          "serde/std"
+        ],
+        "serde-serialize-no-std": [
+          "serde",
+          "num-complex/serde"
+        ],
+        "slow-tests": [],
+        "sparse": [],
+        "std": [
+          "matrixmultiply",
+          "num-traits/std",
+          "num-complex/std",
+          "num-rational/std",
+          "approx/std",
+          "simba/std",
+          "glam030?/std",
+          "glam031?/std",
+          "glam032?/std",
+          "glam033?/std"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/nalgebra",
+      "area": "通用线性代数",
+      "priority": "对照候选",
+      "klimapy_use": "小矩阵、几何及分解能力对照",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "ndarray",
+      "version": "0.17.2",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.64",
+      "released_at": "2026-01-10T23:19:18.256265Z",
+      "repository": "https://github.com/rust-ndarray/ndarray",
+      "documentation": "https://docs.rs/ndarray/0.17.2/",
+      "features": {
+        "blas": [
+          "dep:cblas-sys",
+          "dep:libc"
+        ],
+        "default": [
+          "std"
+        ],
+        "matrixmultiply-threading": [
+          "matrixmultiply/threading"
+        ],
+        "portable-atomic-critical-section": [
+          "portable-atomic/critical-section"
+        ],
+        "rayon": [
+          "dep:rayon",
+          "std"
+        ],
+        "serde": [
+          "dep:serde"
+        ],
+        "std": [
+          "num-traits/std",
+          "matrixmultiply/std"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/ndarray",
+      "area": "多维数组",
+      "priority": "按需",
+      "klimapy_use": "Rust 内部数组视图；不替换公开 Field",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "ndarray-linalg",
+      "version": "0.18.1",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": null,
+      "released_at": "2026-01-12T14:25:53.616040Z",
+      "repository": "https://github.com/rust-ndarray/ndarray-linalg",
+      "documentation": "https://docs.rs/ndarray-linalg/0.18.1/",
+      "features": {
+        "blas": [
+          "ndarray/blas"
+        ],
+        "default": [
+          "blas"
+        ],
+        "intel-mkl": [
+          "lax/intel-mkl-static-lp64-seq"
+        ],
+        "intel-mkl-dynamic-ilp64-iomp": [
+          "lax/intel-mkl-dynamic-ilp64-iomp"
+        ],
+        "intel-mkl-dynamic-ilp64-seq": [
+          "lax/intel-mkl-dynamic-ilp64-seq"
+        ],
+        "intel-mkl-dynamic-lp64-iomp": [
+          "lax/intel-mkl-dynamic-lp64-iomp"
+        ],
+        "intel-mkl-dynamic-lp64-seq": [
+          "lax/intel-mkl-dynamic-lp64-seq"
+        ],
+        "intel-mkl-static": [
+          "lax/intel-mkl-static"
+        ],
+        "intel-mkl-static-ilp64-iomp": [
+          "lax/intel-mkl-static-ilp64-iomp"
+        ],
+        "intel-mkl-static-ilp64-seq": [
+          "lax/intel-mkl-static-ilp64-seq"
+        ],
+        "intel-mkl-static-lp64-iomp": [
+          "lax/intel-mkl-static-lp64-iomp"
+        ],
+        "intel-mkl-static-lp64-seq": [
+          "lax/intel-mkl-static-lp64-seq"
+        ],
+        "intel-mkl-system": [
+          "lax/intel-mkl-system"
+        ],
+        "netlib": [
+          "lax/netlib"
+        ],
+        "netlib-static": [
+          "lax/netlib-static"
+        ],
+        "netlib-system": [
+          "lax/netlib-system"
+        ],
+        "openblas": [
+          "lax/openblas"
+        ],
+        "openblas-static": [
+          "lax/openblas-static"
+        ],
+        "openblas-system": [
+          "lax/openblas-system"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/ndarray-linalg",
+      "area": "LAPACK 接口",
+      "priority": "对照候选",
+      "klimapy_use": "连接成熟 BLAS/LAPACK，增加原生链接成本",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "sprs",
+      "version": "0.11.6",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.88.0",
+      "released_at": "2026-10-13T06:36:17.442817Z",
+      "repository": "https://github.com/sparsemat/sprs",
+      "documentation": "https://docs.rs/sprs/0.11.6/",
+      "features": {
+        "default": [
+          "alga",
+          "multi_thread"
+        ],
+        "multi_thread": [
+          "dep:rayon",
+          "dep:num_cpus"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/sprs",
+      "area": "稀疏矩阵",
+      "priority": "按需",
+      "klimapy_use": "重映射权重存储和批量应用",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "rustfft",
+      "version": "6.4.1",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.61",
+      "released_at": "2025-09-18T03:59:45.041669Z",
+      "repository": "https://github.com/ejmahler/RustFFT",
+      "documentation": "https://docs.rs/rustfft/6.4.1/",
+      "features": {
+        "avx": [],
+        "default": [
+          "avx",
+          "sse",
+          "neon"
+        ],
+        "neon": [],
+        "sse": [],
+        "wasm_simd": []
+      },
+      "source": "https://crates.io/api/v1/crates/rustfft",
+      "area": "复数 FFT",
+      "priority": "功能储备",
+      "klimapy_use": "频谱、滤波和周期分析",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "realfft",
+      "version": "3.5.1",
+      "license": "MIT",
+      "rust_version": "1.61",
+      "released_at": "2026-10-26T20:26:23.567036Z",
+      "repository": "https://github.com/HEnquist/realfft",
+      "documentation": "https://docs.rs/realfft/3.5.1/",
+      "features": {
+        "avx": [
+          "rustfft/avx"
+        ],
+        "default": [
+          "rustfft/default"
+        ],
+        "neon": [
+          "rustfft/neon"
+        ],
+        "sse": [
+          "rustfft/sse"
+        ],
+        "wasm_simd": [
+          "rustfft/wasm_simd"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/realfft",
+      "area": "实数 FFT",
+      "priority": "功能储备",
+      "klimapy_use": "实值气候时间序列频谱",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "statrs",
+      "version": "0.19.1",
+      "license": "MIT",
+      "rust_version": "1.89.0",
+      "released_at": "2026-08-11T16:50:16.525087Z",
+      "repository": "https://github.com/statrs-dev/statrs",
+      "documentation": "https://docs.rs/statrs/0.19.1/",
+      "features": {
+        "default": [
+          "std",
+          "nalgebra",
+          "rand"
+        ],
+        "kde": [
+          "dep:kdtree",
+          "nalgebra"
+        ],
+        "nalgebra": [
+          "dep:nalgebra",
+          "std"
+        ],
+        "rand": [
+          "dep:rand",
+          "nalgebra?/rand-no-std",
+          "rand?/std_rng"
+        ],
+        "std": [
+          "approx/std",
+          "num-traits/std",
+          "nalgebra?/std",
+          "rand?/std"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/statrs",
+      "area": "统计分布与特殊函数",
+      "priority": "第二阶段",
+      "klimapy_use": "CDF/逆 CDF、概率和统计分布",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "rand",
+      "version": "0.10.3",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.85",
+      "released_at": "2026-09-20T06:37:47.850624Z",
+      "repository": "https://github.com/rust-random/rand",
+      "documentation": "https://docs.rs/rand/0.10.3/",
+      "features": {
+        "alloc": [],
+        "chacha": [
+          "dep:chacha20"
+        ],
+        "default": [
+          "std",
+          "std_rng",
+          "sys_rng",
+          "thread_rng"
+        ],
+        "log": [],
+        "serde": [
+          "dep:serde"
+        ],
+        "simd_support": [],
+        "std": [
+          "alloc",
+          "getrandom?/std"
+        ],
+        "std_rng": [
+          "dep:chacha20"
+        ],
+        "sys_rng": [
+          "dep:getrandom",
+          "getrandom/sys_rng"
+        ],
+        "thread_rng": [
+          "std",
+          "std_rng",
+          "sys_rng"
+        ],
+        "unbiased": []
+      },
+      "source": "https://crates.io/api/v1/crates/rand",
+      "area": "随机数",
+      "priority": "按需",
+      "klimapy_use": "蒙特卡洛与明确需要随机采样的功能",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "rand_distr",
+      "version": "0.6.0",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.85",
+      "released_at": "2026-02-10T13:15:01.517269Z",
+      "repository": "https://github.com/rust-random/rand_distr",
+      "documentation": "https://docs.rs/rand_distr/0.6.0/",
+      "features": {
+        "alloc": [
+          "rand/alloc"
+        ],
+        "default": [
+          "std"
+        ],
+        "serde": [
+          "dep:serde",
+          "dep:serde_with",
+          "rand/serde"
+        ],
+        "std": [
+          "alloc",
+          "rand/std"
+        ],
+        "std_math": [
+          "num-traits/std"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/rand_distr",
+      "area": "分布采样",
+      "priority": "按需",
+      "klimapy_use": "概率分布随机抽样",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "argmin",
+      "version": "0.11.0",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": null,
+      "released_at": "2025-09-28T13:54:27.841503Z",
+      "repository": "https://github.com/argmin-rs/argmin",
+      "documentation": "https://docs.rs/argmin/0.11.0/",
+      "features": {
+        "_full_dev": [
+          "full",
+          "_ndarrayl"
+        ],
+        "_ndarrayl": [
+          "argmin-math/ndarray_latest"
+        ],
+        "default": [
+          "rand"
+        ],
+        "full": [
+          "default",
+          "serde1",
+          "ctrlc"
+        ],
+        "rand": [
+          "dep:rand",
+          "argmin-math/rand"
+        ],
+        "serde1": [
+          "serde",
+          "rand_xoshiro/serde"
+        ],
+        "wasm-bindgen": [
+          "getrandom/wasm_js"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/argmin",
+      "area": "数值优化",
+      "priority": "功能储备",
+      "klimapy_use": "拟合目标函数、参数估计与校准",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "ndarray-interp",
+      "version": "0.6.0",
+      "license": "MIT",
+      "rust_version": null,
+      "released_at": "2026-01-22T17:30:05.391282Z",
+      "repository": "https://github.com/jonasBoss/ndarray-interp",
+      "documentation": "https://docs.rs/ndarray-interp/0.6.0/",
+      "features": {},
+      "source": "https://crates.io/api/v1/crates/ndarray-interp",
+      "area": "规则网格插值",
+      "priority": "对照候选",
+      "klimapy_use": "一维线性/样条与二维双线性插值",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "geo",
+      "version": "0.33.1",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.88",
+      "released_at": "2026-04-20T21:01:19.022915Z",
+      "repository": "https://github.com/georust/geo",
+      "documentation": "https://docs.rs/geo/0.33.1/",
+      "features": {
+        "__allow_deprecated_features": [],
+        "default": [
+          "earcut",
+          "spade",
+          "multithreading"
+        ],
+        "earcutr": [
+          "earcut"
+        ],
+        "multithreading": [
+          "i_overlay/allow_multithreading",
+          "geo-types/multithreading"
+        ],
+        "proj-network": [
+          "proj",
+          "proj/network"
+        ],
+        "serde": [
+          "dep:serde",
+          "geo-types/serde"
+        ],
+        "spade": [
+          "dep:spade",
+          "geo-types/spade_2"
+        ],
+        "use-proj": [
+          "proj"
+        ],
+        "use-serde": [
+          "serde"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/geo",
+      "area": "几何算法",
+      "priority": "第二阶段评估",
+      "klimapy_use": "区域掩膜与几何关系",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "rstar",
+      "version": "0.13.0",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.85",
+      "released_at": "2026-05-24T13:51:26.336790Z",
+      "repository": "https://github.com/georust/rstar",
+      "documentation": "https://docs.rs/rstar/0.13.0/",
+      "features": {
+        "debug": [],
+        "default": []
+      },
+      "source": "https://crates.io/api/v1/crates/rstar",
+      "area": "空间索引",
+      "priority": "按需",
+      "klimapy_use": "区域候选筛选、包围盒和邻近查询",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "kiddo",
+      "version": "6.3.0",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.89.0",
+      "released_at": "2026-09-06T16:56:29.478533Z",
+      "repository": "https://github.com/sdd/kiddo",
+      "documentation": "https://docs.rs/kiddo/6.3.0/",
+      "features": {
+        "buffered_result_collection": [
+          "dep:smallvec"
+        ],
+        "cargo_asm": [
+          "dep:rand",
+          "dep:rand_chacha"
+        ],
+        "cpp_competitors": [
+          "dep:cc"
+        ],
+        "csv": [
+          "dep:csv"
+        ],
+        "default": [
+          "fixed",
+          "multi-threaded"
+        ],
+        "exact_query_stats": [],
+        "f16": [
+          "dep:half"
+        ],
+        "fixed": [
+          "dep:fixed"
+        ],
+        "fuzz": [
+          "test_utils"
+        ],
+        "huge_pages": [
+          "dep:libc"
+        ],
+        "las": [
+          "dep:las"
+        ],
+        "leaf_nta_prefetch": [],
+        "leaf_view_chunked": [],
+        "logging_off": [
+          "dep:log",
+          "tracing/max_level_off",
+          "tracing/release_max_level_off",
+          "log/max_level_off",
+          "log/release_max_level_off"
+        ],
+        "modified_van_emde_boas": [],
+        "multi-threaded": [
+          "dep:rayon"
+        ],
+        "no_inline": [],
+        "result_collection_stats": [],
+        "rkyv_08": [
+          "dep:rkyv_08",
+          "dep:ptr_meta",
+          "dep:bytecheck"
+        ],
+        "serde": [
+          "dep:serde",
+          "serde/derive",
+          "fixed?/serde",
+          "aligned-vec/serde"
+        ],
+        "simd": [],
+        "simulator": [],
+        "small_n_result_collectors": [
+          "dep:smallvec"
+        ],
+        "test_utils": [
+          "dep:rand",
+          "dep:rand_chacha",
+          "dep:fixed"
+        ],
+        "unreliable_select_nth_unstable": []
+      },
+      "source": "https://crates.io/api/v1/crates/kiddo",
+      "area": "近邻搜索",
+      "priority": "按需",
+      "klimapy_use": "站点匹配与低维 k-d tree 查询",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "rayon",
+      "version": "1.12.0",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.80",
+      "released_at": "2026-04-14T00:56:56.454086Z",
+      "repository": "https://github.com/rayon-rs/rayon",
+      "documentation": "https://docs.rs/rayon/1.12.0/",
+      "features": {
+        "web_spin_lock": [
+          "dep:wasm_sync",
+          "rayon-core/web_spin_lock"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/rayon",
+      "area": "CPU 并行",
+      "priority": "优先评估",
+      "klimapy_use": "格点独立任务及线程池管理",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "netcdf",
+      "version": "0.12.1",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.77.0",
+      "released_at": "2026-07-26T10:34:04.517896Z",
+      "repository": "https://github.com/georust/netcdf",
+      "documentation": "https://docs.rs/netcdf/0.12.1/",
+      "features": {
+        "default": [
+          "ndarray"
+        ],
+        "derive": [
+          "dep:netcdf-derive"
+        ],
+        "mpi": [
+          "dep:mpi-sys",
+          "netcdf-sys/mpi"
+        ],
+        "ndarray": [
+          "dep:ndarray"
+        ],
+        "static": [
+          "netcdf-sys/static"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/netcdf",
+      "area": "NetCDF 原生接口",
+      "priority": "维护候选",
+      "klimapy_use": "封装 netCDF-C；不消除 C 库依赖",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "gdal",
+      "version": "0.19.0",
+      "license": "MIT",
+      "rust_version": "1.80",
+      "released_at": "2025-12-23T09:28:30.776899Z",
+      "repository": "https://github.com/georust/gdal",
+      "documentation": "https://docs.rs/gdal/0.19.0/",
+      "features": {
+        "array": [
+          "ndarray"
+        ],
+        "bindgen": [
+          "gdal-sys/bindgen"
+        ],
+        "default": []
+      },
+      "source": "https://crates.io/api/v1/crates/gdal",
+      "area": "地理文件原生接口",
+      "priority": "维护候选",
+      "klimapy_use": "封装 GDAL；不消除 GDAL 依赖",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "proj",
+      "version": "0.31.0",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.85",
+      "released_at": "2025-08-29T21:47:08.221526Z",
+      "repository": "https://github.com/georust/proj",
+      "documentation": "https://docs.rs/proj/0.31.0/",
+      "features": {
+        "bundled_proj": [
+          "proj-sys/bundled_proj"
+        ],
+        "default": [
+          "geo-types"
+        ],
+        "network": [
+          "ureq",
+          "http",
+          "proj-sys/network"
+        ],
+        "pkg_config": [
+          "proj-sys/pkg_config"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/proj",
+      "area": "坐标转换原生接口",
+      "priority": "维护候选",
+      "klimapy_use": "封装 PROJ；仍需数据库和相关资源",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    },
+    {
+      "name": "zarrs",
+      "version": "0.23.14",
+      "license": "MIT OR Apache-2.0",
+      "rust_version": "1.91",
+      "released_at": "2026-08-14T22:34:05.685462Z",
+      "repository": "https://github.com/zarrs/zarrs",
+      "documentation": "https://docs.rs/zarrs/0.23.14/",
+      "features": {
+        "adler32": [
+          "dep:simd-adler32"
+        ],
+        "async": [
+          "dep:async-generic",
+          "dep:async-trait",
+          "dep:futures",
+          "moka/future",
+          "zarrs_storage/async",
+          "zarrs_codec/async"
+        ],
+        "bitround": [],
+        "blosc": [
+          "dep:blosc-src",
+          "dep:blusc"
+        ],
+        "bz2": [
+          "dep:bzip2"
+        ],
+        "chrono": [
+          "dep:chrono"
+        ],
+        "crc32c": [
+          "dep:crc32c"
+        ],
+        "default": [
+          "filesystem",
+          "ndarray",
+          "blosc",
+          "crc32c",
+          "gzip",
+          "sharding",
+          "transpose",
+          "zstd"
+        ],
+        "dlpack": [
+          "dep:dlpark"
+        ],
+        "filesystem": [
+          "dep:zarrs_filesystem"
+        ],
+        "fletcher32": [],
+        "float8": [
+          "dep:float8"
+        ],
+        "gdeflate": [
+          "dep:gdeflate-sys"
+        ],
+        "gzip": [
+          "dep:flate2"
+        ],
+        "jiff": [
+          "dep:jiff"
+        ],
+        "microfloat": [
+          "dep:microfloat"
+        ],
+        "ndarray": [
+          "dep:ndarray"
+        ],
+        "pcodec": [
+          "dep:pco"
+        ],
+        "sharding": [],
+        "transpose": [
+          "dep:ndarray"
+        ],
+        "zfp": [
+          "dep:zfp-sys"
+        ],
+        "zlib": [
+          "dep:flate2"
+        ],
+        "zstd": [
+          "dep:zstd"
+        ]
+      },
+      "source": "https://crates.io/api/v1/crates/zarrs",
+      "area": "分块数组存储",
+      "priority": "功能储备",
+      "klimapy_use": "后续分块存储及数据入口",
+      "integration_status": "researched_not_integrated",
+      "selection": "candidate",
+      "msrv_note": "crate-declared only; selected transitive dependencies may require newer Rust"
+    }
+  ],
+  "scope": "Research and migration proposal, not an integration or performance certification",
+  "primary_sources_only": true,
+  "local_project": {
+    "rust_version_declared": "1.82",
+    "rust_crate_type": "cdylib",
+    "build_flags": [
+      "--release",
+      "--offline",
+      "--locked"
+    ],
+    "python_runtime_dependencies": [
+      "numpy"
+    ]
+  }
+}

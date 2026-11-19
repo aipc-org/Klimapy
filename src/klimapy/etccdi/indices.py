@@ -4,7 +4,6 @@ Inputs and outputs are klimapy.native.Field, or mappings of those fields for
 compute_indices. No dataframe framework is imported by the production package.
 """
 
-from functools import wraps
 import inspect
 
 import numpy as np
@@ -17,15 +16,16 @@ from .._core.validation import (
     year_length,
     validate_reference_years,
     PRECIP_NAMES,
-    TEMP_NAMES,
 )
 
 
 def check_data(pr, valid_var_names=None):
+    """Validate native daily precipitation and normalize units to mm/day."""
     return normalize_time(convert_units(pr, "precip"))
 
 
 def check_temperature_data(temp, valid_var_names=None):
+    """Validate native daily temperature and normalize units to degC."""
     return normalize_time(convert_units(temp, "temperature"))
 
 
@@ -98,6 +98,7 @@ def _run(
 
 
 def select_baseline_period(data, start_year, end_year):
+    """Select inclusive reference years from a daily native Field."""
     validate_reference_years(data.time, start_year, end_year)
     years = data.time.labels()[0]
     return data.isel(time=(years >= start_year) & (years <= end_year))
@@ -125,6 +126,7 @@ def _baseline(data, baseline_years):
 
 
 def PRCPTOT(pr, *, min_valid_fraction=0.9):
+    """Annual sum of wet-day precipitation (>= 1 mm/day), returned in mm."""
     return _run(
         check_data(pr),
         0,
@@ -136,6 +138,7 @@ def PRCPTOT(pr, *, min_valid_fraction=0.9):
 
 
 def R1mm_days(pr, *, min_valid_fraction=0.9):
+    """Annual wet-day count (precipitation >= 1 mm/day)."""
     return _run(
         check_data(pr),
         1,
@@ -146,6 +149,7 @@ def R1mm_days(pr, *, min_valid_fraction=0.9):
 
 
 def SDII(pr, *, min_valid_fraction=0.9):
+    """Annual wet-day total divided by wet-day count (mm/day); no wet days gives NaN."""
     return _run(
         check_data(pr),
         2,
@@ -157,6 +161,7 @@ def SDII(pr, *, min_valid_fraction=0.9):
 
 
 def RXnday(pr, window=5, *, freq="YS", min_valid_fraction=0.9):
+    """Maximum consecutive n-day precipitation sum (mm), annual or monthly."""
     result = _run(
         check_data(pr),
         4,
@@ -174,30 +179,35 @@ def RXnday(pr, window=5, *, freq="YS", min_valid_fraction=0.9):
 
 
 def RX1DAY(pr, *, freq="YS", min_valid_fraction=0.9):
+    """Maximum one-day precipitation (mm); freq is YS (annual) or MS (monthly)."""
     value = RXnday(pr, 1, freq=freq, min_valid_fraction=min_valid_fraction)
     value.name = "RX1DAY"
     return value
 
 
 def RX5DAY(pr, *, freq="YS", min_valid_fraction=0.9):
+    """Maximum five-day precipitation sum (mm); windows are assigned by ending date."""
     value = RXnday(pr, 5, freq=freq, min_valid_fraction=min_valid_fraction)
     value.name = "RX5DAY"
     return value
 
 
 def CDD(pr, *, min_valid_fraction=0.9):
+    """Annual longest run of dry days (< 1 mm/day); runs restart at year boundaries."""
     return _run(
         check_data(pr), 5, name="CDD", limit=1.0, min_valid_fraction=min_valid_fraction
     )
 
 
 def CWD(pr, *, min_valid_fraction=0.9):
+    """Annual longest run of wet days (>= 1 mm/day); runs restart at year boundaries."""
     return _run(
         check_data(pr), 6, name="CWD", limit=1.0, min_valid_fraction=min_valid_fraction
     )
 
 
 def Rnnmm(pr, threshold=10.0, *, min_valid_fraction=0.9):
+    """Annual count of days with precipitation >= threshold mm/day."""
     if not np.isfinite(threshold) or threshold < 0:
         raise ValueError("threshold must be finite and nonnegative")
     return _run(
@@ -228,6 +238,20 @@ def _fixed_factory(n, mode):
         )
 
     metric.__name__ = f"R{n}mm_{mode}"
+    metric.__qualname__ = metric.__name__
+    descriptions = {
+        "precipitation": "sum of selected precipitation (mm)",
+        "days": "number of selected days (days/year)",
+        "intensity": "mean precipitation on selected days (mm/day)",
+        "ratio": "selected precipitation / all valid precipitation (0-1)",
+    }
+    metric.__doc__ = (
+        f"Annual {descriptions[mode]} for daily precipitation >= {n} mm/day.\n\n"
+        "Parameters\n----------\n"
+        "pr : klimapy.native.Field\n    Daily precipitation with time as the first dimension.\n"
+        "min_valid_fraction : float, default 0.9\n    Required fraction of the complete calendar year.\n"
+        "\nReturns\n-------\nklimapy.native.Field\n    Annual values on the year dimension; invalid periods are NaN."
+    )
     return metric
 
 
@@ -276,6 +300,26 @@ def _percentile_factory(n, mode):
         return result
 
     metric.__name__ = f"R{n}mm_{mode}"
+    metric.__qualname__ = metric.__name__
+    descriptions = {
+        "precipitation": "precipitation sum (mm)",
+        "days": "day count (days/year)",
+        "intensity": "mean intensity (mm/day)",
+        "ratio": "fraction of all valid precipitation (0-1)",
+    }
+    metric.__doc__ = (
+        f"Annual {descriptions[mode]} above wet-day percentile {n}.\n\n"
+        "Parameters\n----------\n"
+        "pr : klimapy.native.Field\n    Daily target precipitation, time first.\n"
+        "baseline_pr : klimapy.native.Field or None, default None\n"
+        "    Optional reference precipitation on the same spatial grid; otherwise use pr.\n"
+        "baseline_years : pair of int\n    Required inclusive reference years.\n"
+        "min_valid_fraction : float, default 0.9\n    Required fraction of the complete calendar year.\n"
+        "\nReturns\n-------\nklimapy.native.Field\n    Annual values; unavailable thresholds produce NaN.\n"
+        "\nNotes\n-----\n"
+        "Thresholds use at least 10 wet days (>=1 mm/day) and type-8 quantiles.\n"
+        "Selection is strictly above the threshold. Ratios use all valid precipitation as denominator."
+    )
     return metric
 
 
@@ -306,15 +350,22 @@ def _temp_factory(name, op, limit=0.0, freq="YS"):
             return calculate(tx, min_valid_fraction)
 
     metric.__name__ = name
-    # Public parameter names are used by compute_indices and remain compatible.
-    variable = "tn" if name in ("FD", "TR", "TNx", "TNn") else "tx"
-    metric.__signature__ = inspect.Signature(
-        [
-            inspect.Parameter(variable, inspect.Parameter.POSITIONAL_OR_KEYWORD),
-            inspect.Parameter(
-                "min_valid_fraction", inspect.Parameter.KEYWORD_ONLY, default=0.9
-            ),
-        ]
+    metric.__qualname__ = name
+    definitions = {
+        "FD": "Annual count of days with daily minimum temperature < 0 degC.",
+        "SU": "Annual count of days with daily maximum temperature > 25 degC.",
+        "ID": "Annual count of days with daily maximum temperature < 0 degC.",
+        "TR": "Annual count of days with daily minimum temperature > 20 degC.",
+        "TXx": "Monthly maximum of daily maximum temperature (degC).",
+        "TNx": "Monthly maximum of daily minimum temperature (degC).",
+        "TXn": "Monthly minimum of daily maximum temperature (degC).",
+        "TNn": "Monthly minimum of daily minimum temperature (degC).",
+    }
+    metric.__doc__ = (
+        definitions[name] + "\n\nInput is a daily native Field with time first. "
+        "Kelvin is converted to degC. min_valid_fraction defaults to 0.9 "
+        "of the complete calendar reporting period. Returns a Field; "
+        "periods failing coverage are NaN."
     )
     return metric
 
@@ -418,6 +469,13 @@ def _temp_percentile(
 
 
 def TN10p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9):
+    """Annual percentage of valid minimum-temperature days below their calendar-day 10th percentile.
+
+    Uses a circular five-day window and type-8 quantiles. Reference years
+    are inclusive (default 1961-1990); in-base year replacement bootstrap
+    is enabled by default and requires at least two reference years.
+    February 29 is excluded except in 360_day calendars. Coverage defaults
+    to 0.9 of the original calendar year; insufficient coverage yields NaN."""
     return _temp_percentile(
         tn,
         baseline_years,
@@ -430,6 +488,13 @@ def TN10p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction
 
 
 def TX10p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9):
+    """Annual percentage of valid maximum-temperature days below their calendar-day 10th percentile.
+
+    Uses a circular five-day window and type-8 quantiles. Reference years
+    are inclusive (default 1961-1990); in-base year replacement bootstrap
+    is enabled by default and requires at least two reference years.
+    February 29 is excluded except in 360_day calendars. Coverage defaults
+    to 0.9 of the original calendar year; insufficient coverage yields NaN."""
     return _temp_percentile(
         tx,
         baseline_years,
@@ -442,6 +507,13 @@ def TX10p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction
 
 
 def TN90p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9):
+    """Annual percentage of valid minimum-temperature days above their calendar-day 90th percentile.
+
+    Uses a circular five-day window and type-8 quantiles. Reference years
+    are inclusive (default 1961-1990); in-base year replacement bootstrap
+    is enabled by default and requires at least two reference years.
+    February 29 is excluded except in 360_day calendars. Coverage defaults
+    to 0.9 of the original calendar year; insufficient coverage yields NaN."""
     return _temp_percentile(
         tn,
         baseline_years,
@@ -454,6 +526,13 @@ def TN90p(tn, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction
 
 
 def TX90p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction=0.9):
+    """Annual percentage of valid maximum-temperature days above their calendar-day 90th percentile.
+
+    Uses a circular five-day window and type-8 quantiles. Reference years
+    are inclusive (default 1961-1990); in-base year replacement bootstrap
+    is enabled by default and requires at least two reference years.
+    February 29 is excluded except in 360_day calendars. Coverage defaults
+    to 0.9 of the original calendar year; insufficient coverage yields NaN."""
     return _temp_percentile(
         tx,
         baseline_years,
@@ -466,6 +545,11 @@ def TX90p(tx, baseline_years=(1961, 1990), *, bootstrap=True, min_valid_fraction
 
 
 def WSDI(tx, baseline_years=(1961, 1990), *, min_valid_fraction=0.9):
+    """Annual total days in runs of at least six days above calendar-day TX90 thresholds.
+
+    Reference years default to 1961-1990. Uses fixed six-day spells, type-8
+    thresholds, no bootstrap, and excludes February 29 except for 360_day.
+    Runs restart each year. Returns an annual Field in days/year."""
     return _temp_percentile(
         tx,
         baseline_years,
@@ -478,6 +562,11 @@ def WSDI(tx, baseline_years=(1961, 1990), *, min_valid_fraction=0.9):
 
 
 def CSDI(tn, baseline_years=(1961, 1990), *, min_valid_fraction=0.9):
+    """Annual total days in runs of at least six days below calendar-day TN10 thresholds.
+
+    Reference years default to 1961-1990. Uses fixed six-day spells, type-8
+    thresholds, no bootstrap, and excludes February 29 except for 360_day.
+    Runs restart each year. Returns an annual Field in days/year."""
     return _temp_percentile(
         tn,
         baseline_years,
@@ -490,6 +579,7 @@ def CSDI(tn, baseline_years=(1961, 1990), *, min_valid_fraction=0.9):
 
 
 def GSL(tg, hemisphere="NH", *, min_valid_fraction=0.9):
+    """Growing-season length from six-day warm/cold spells; NH natural year or SH July-June."""
     data = check_temperature_data(tg)
     hemi = hemisphere.upper()
     if hemi not in ("NH", "SH"):
@@ -513,6 +603,7 @@ def GSL(tg, hemisphere="NH", *, min_valid_fraction=0.9):
 
 
 def DTR(tx, tn, *, min_valid_fraction=0.9):
+    """Monthly mean of paired daily maximum minus minimum temperature (degC)."""
     tx, tn = check_temperature_data(tx), check_temperature_data(tn)
     _aligned(tx, tn)
     return _run(
@@ -550,6 +641,27 @@ def compute_indices(
     spatial_chunk_size=None,
     index_options=None,
 ):
+    """Compute selected native ETCCDI indices and return a dict of Fields.
+
+    Parameters
+    ----------
+    data : Field, Dataset, or mapping of str to Field
+        For mixed variables use pr/tx/tn/tg keys. DTR requires tx and tn.
+    indices : sequence of str or None
+        Exact public names; None selects the seven basic precipitation indices.
+    baseline_years : pair of int or None
+        Inclusive reference years for percentile indices.
+    min_valid_fraction : float, default 0.9
+        Minimum valid fraction of each complete calendar reporting period.
+    spatial_chunk_size : int or None
+        Tile width in each spatial direction; requires aligned time/lat/lon inputs.
+    index_options : dict or None
+        Per-index keyword arguments; local baseline_years override the shared value.
+
+    Returns
+    -------
+    dict[str, Field]
+        Requested keys and annual or monthly Fields; invalid periods are NaN."""
     selected = (
         ["PRCPTOT", "R1mm_days", "SDII", "RX1DAY", "RX5DAY", "CDD", "CWD"]
         if indices is None

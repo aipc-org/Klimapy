@@ -1,25 +1,26 @@
 """Native streamed spatial downscaling; climatology and harmonics run in Rust."""
 
+import json
 import logging
+import tempfile
 from contextlib import ExitStack
 from pathlib import Path
-import tempfile
 
 import numpy as np
 
 from ..._backends import rust as _accelerate
-from ...native.correction import smooth
-from ..._core.common import MIN_PRECIP, MIN_RATIO, MAX_RATIO
-from ..._core.native_adapter import open_precip_dataset
+from ..._core.common import MAX_RATIO, MIN_PRECIP, MIN_RATIO
 from ..._core.engine import (
-    read_precip,
-    mapped_days,
-    calendar_info,
     GridWeights,
     NetCDFWriter,
     allocate,
+    calendar_info,
     check_reference,
+    mapped_days,
 )
+from ..._core.native_adapter import open_climate_dataset
+from ...native.correction import smooth
+from ...native import open_collection, quality_report
 
 logger = logging.getLogger(__name__)
 DEBUG_CHECK = False
@@ -30,10 +31,6 @@ def fft_smooth_three_harmonics(daily_series, n_days, n_harmonics=3):
     if len(daily_series) != n_days:
         raise ValueError("Series length differs from n_days")
     return smooth(daily_series, n_harmonics)
-
-
-def _smooth_block(block, n_harmonics=3):
-    return smooth(block, n_harmonics)
 
 
 def area_weighted_regrid(source_lat, source_lon, source_data, target_lat, target_lon):
@@ -58,12 +55,13 @@ def downscale(
             for n in (time_chunk_size, spatial_chunk_size)
         ):
             raise ValueError("Chunk sizes must be positive integers")
+        variable = bc_result.get("variable", "pr")
         with ExitStack() as stack:
-            obs = stack.enter_context(open_precip_dataset(obs_path))
+            obs = stack.enter_context(open_climate_dataset(obs_path, variable))
             check_reference(obs.time, ref_start_year, ref_end_year)
             history, future = [
-                stack.enter_context(open_precip_dataset(bc_result[key]))
-                for key in ("corrected_hist_pr", "corrected_fut_pr")
+                stack.enter_context(open_climate_dataset(bc_result[key], variable))
+                for key in (f"corrected_hist_{variable}", f"corrected_fut_{variable}")
             ]
             for d in ("lat", "lon"):
                 if not np.array_equal(history.coords[d], future.coords[d]):
@@ -111,7 +109,10 @@ def downscale(
                 sl = (slice(None), slice(row, row + spatial_chunk_size), slice(None))
                 # Group means are part of the Rust climate pipeline, not a NumPy
                 # fallback. Use the native normalizer before harmonic smoothing.
-                climate[sl] = smooth(_accelerate.climate_mean(sums[sl], counts[sl]))
+                climate[sl] = smooth(
+                    _accelerate.climate_mean(sums[sl], counts[sl]),
+                    nonnegative=variable in ("pr", "dtr"),
+                )
             coarse_weights = stack.enter_context(
                 GridWeights(
                     obs.coords["lat"],
@@ -136,16 +137,27 @@ def downscale(
                     minimum=MIN_PRECIP,
                     low=MIN_RATIO,
                     high=MAX_RATIO,
+                    additive=variable != "pr",
+                    nonnegative=variable in ("pr", "dtr"),
                 )
             )
-            paths, failures = [], []
+            paths, failures, quality = [], [], []
             for label, data in [("historical", history), ("future", future)]:
                 labels = mapped_days(data.time, cal) - 1
                 if np.any(labels < 0):
                     raise ValueError("Unmappable calendar days in model output")
-                path = outdir / f"{model_name}_{label}_BCSD.nc"
+                path = outdir / (
+                    f"{model_name}_{variable}_{label}_BCSD.nc"
+                    if variable != "pr"
+                    else f"{model_name}_{label}_BCSD.nc"
+                )
                 attrs = {
-                    "units": "mm/day",
+                    "units": "mm/day" if variable == "pr" else "degC",
+                    "variable": variable,
+                    "spatial_correction": "multiplicative"
+                    if variable == "pr"
+                    else "additive",
+                    "detrended": "false",
                     "method": "Rust FITPACK BC + low-harmonic SD",
                     "calendar_type": cal,
                     "reference_period": f"{ref_start_year}-{ref_end_year}",
@@ -153,7 +165,12 @@ def downscale(
                     "failed_time_steps": 0,
                 }
                 with NetCDFWriter(
-                    path, data.time, obs.coords["lat"], obs.coords["lon"], attrs
+                    path,
+                    data.time,
+                    obs.coords["lat"],
+                    obs.coords["lon"],
+                    attrs,
+                    variable=variable,
                 ) as writer:
                     for start in range(0, len(labels), chunk):
                         stop = min(start + chunk, len(labels))
@@ -179,6 +196,26 @@ def downscale(
                     attrs["failed_time_steps"] = sum(
                         f["stop"] - f["start"] for f in failures if f["period"] == label
                     )
+                bounds = (
+                    (0, 1650)
+                    if variable == "pr"
+                    else (
+                        (0, None) if variable == "dtr" else (200 - 273.15, 340 - 273.15)
+                    )
+                )
+                report = quality_report(
+                    open_collection([path], variable),
+                    valid_min=bounds[0],
+                    valid_max=bounds[1],
+                    time_chunk_size=chunk,
+                )
+                qc_path = path.with_suffix(".qc.json")
+                qc_path.write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                quality.append({"path": str(qc_path), "report": report})
                 paths.append(str(path))
             return {
                 "hist_bcsd_path": paths[0],
@@ -186,6 +223,7 @@ def downscale(
                 "time_coordinate": "time",
                 "diagnostics": {
                     "failed_chunks": failures,
+                    "quality": quality,
                     "climatology_days": ndays,
                     "time_chunk_size": chunk,
                     "spatial_chunk_size": spatial_chunk_size,

@@ -1,0 +1,487 @@
+use dbase::dbase_record;
+
+use std::io::{Cursor, Read, Seek, Write};
+
+use dbase::{
+    Date, DateTime, FieldError, FieldIterator, FieldName, FieldValue, FieldWriter, ReadableRecord,
+    Reader, Record, RecordIndex, TableWriterBuilder, Time, WritableRecord,
+};
+use std::convert::{TryFrom, TryInto};
+use std::fmt::Debug;
+
+const LINE_DBF: &str = "./tests/data/line.dbf";
+const NONE_FLOAT_DBF: &str = "./tests/data/contain_none_float.dbf";
+const NULL_PADDED_NUMERIC_DBF: &str = "./tests/data/contain_null_padded_numeric.dbf";
+const STATIONS: &str = "./tests/data/stations.dbf";
+const STATIONS_WITH_DELETED: &str = "./tests/data/stations_with_deleted.dbf";
+#[cfg(feature = "yore")]
+const CP850_DBF: &str = "tests/data/cp850.dbf";
+
+#[cfg(feature = "encoding_rs")]
+const CP936_DBF: &str = "tests/data/cp936.dbf";
+
+fn write_read_compare<R>(records: &Vec<R>, writer_builder: TableWriterBuilder)
+where
+    R: WritableRecord + ReadableRecord + Debug + PartialEq,
+{
+    let mut dst = Cursor::new(Vec::<u8>::new());
+    let writer = writer_builder.build_with_dest(&mut dst);
+
+    writer.write_records(records).unwrap();
+    dst.set_position(0);
+
+    let mut reader = Reader::new(dst).unwrap();
+    let read_records = reader.read_as::<R>().unwrap();
+
+    assert_eq!(&read_records, records);
+}
+
+#[test]
+fn test_none_float() {
+    let records = dbase::read(NONE_FLOAT_DBF).unwrap();
+    assert_eq!(records.len(), 1);
+
+    let mut expected_fields = Record::default();
+    expected_fields.insert(
+        "name".to_owned(),
+        FieldValue::Character(Some("tralala".to_owned())),
+    );
+    expected_fields.insert("value_f".to_owned(), FieldValue::Float(Some(12.345)));
+    expected_fields.insert("value_f_non".to_owned(), FieldValue::Float(None));
+    expected_fields.insert("value_n".to_owned(), FieldValue::Numeric(Some(4.0)));
+    expected_fields.insert("value_n_non".to_owned(), FieldValue::Numeric(None));
+
+    assert_eq!(records[0], expected_fields);
+}
+
+#[test]
+fn test_simple_file() {
+    let records = dbase::read(LINE_DBF).unwrap();
+    assert_eq!(records.len(), 1);
+    let mut expected_fields = Record::default();
+    expected_fields.insert(
+        "name".to_owned(),
+        FieldValue::Character(Some("linestring1".to_owned())),
+    );
+
+    assert_eq!(records[0], expected_fields);
+}
+
+#[test]
+fn test_read_write_simple_file() {
+    let mut expected_fields = Record::default();
+    expected_fields.insert(
+        "name".to_owned(),
+        FieldValue::Character(Some("linestring1".to_owned())),
+    );
+
+    let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
+    let records = reader.read().unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0], expected_fields);
+
+    let mut dst = Cursor::new(Vec::<u8>::new());
+    let writer = TableWriterBuilder::from_reader(reader).build_with_dest(&mut dst);
+    writer.write_records(&records).unwrap();
+    dst.set_position(0);
+
+    let mut reader = dbase::Reader::from_path(LINE_DBF).unwrap();
+    let records = reader.read().unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0], expected_fields);
+}
+
+#[test]
+fn test_read_numeric_value_null_padded() {
+    let records = dbase::read(NULL_PADDED_NUMERIC_DBF).unwrap();
+    assert_eq!(records.len(), 1);
+    let mut expected_fields = Record::default();
+    expected_fields.insert("number".to_owned(), FieldValue::Numeric(Some(1234.)));
+    assert_eq!(records[0], expected_fields);
+}
+
+#[derive(Debug, PartialEq, Clone)]
+struct Album {
+    artist: String,
+    name: String,
+    released: Date,
+    playtime: f64, // in seconds,
+    available: bool,
+}
+
+impl ReadableRecord for Album {
+    fn read_using<R1, R2>(field_iterator: &mut FieldIterator<R1, R2>) -> Result<Self, FieldError>
+    where
+        R1: Read + Seek,
+        R2: Read + Seek,
+    {
+        Ok(Self {
+            artist: field_iterator.read_next_field_as()?.value,
+            name: field_iterator.read_next_field_as()?.value,
+            released: field_iterator.read_next_field_as()?.value,
+            playtime: field_iterator.read_next_field_as()?.value,
+            available: field_iterator.read_next_field_as()?.value,
+        })
+    }
+}
+
+impl WritableRecord for Album {
+    fn write_using<W: Write>(
+        &self,
+        field_writer: &mut FieldWriter<'_, W>,
+    ) -> Result<(), FieldError> {
+        field_writer.write_next_field_value(&self.artist)?;
+        field_writer.write_next_field_value(&self.name)?;
+        field_writer.write_next_field_value(&self.released)?;
+        field_writer.write_next_field_value(&self.playtime)?;
+        field_writer.write_next_field_value(&self.available)?;
+        Ok(())
+    }
+}
+
+#[test]
+fn from_scratch_dbase() {
+    let writer_builder = TableWriterBuilder::new()
+        .add_character_field("Artist".try_into().unwrap(), 50)
+        .add_character_field("Name".try_into().unwrap(), 50)
+        .add_date_field("Released".try_into().unwrap())
+        .add_numeric_field("Playtime".try_into().unwrap(), 10, 2)
+        .add_logical_field(FieldName::try_from("Available").unwrap());
+
+    let records = vec![
+        Album {
+            artist: "Fallujah".to_string(),
+            name: "The Flesh Prevails".to_string(),
+            released: Date::new(22, 6, 2014).unwrap(),
+            playtime: 2481.12f64,
+            available: false,
+        },
+        Album {
+            artist: "Beyond Creation".to_string(),
+            name: "Earthborn Evolution".to_string(),
+            released: Date::new(24, 10, 2014).unwrap(),
+            playtime: 24f64,
+            available: true,
+        },
+    ];
+
+    write_read_compare(&records, writer_builder);
+}
+
+#[test]
+fn from_scratch_fox_pro_record() {
+    let writer_builder = TableWriterBuilder::new()
+        .add_integer_field(FieldName::try_from("integer").unwrap())
+        .add_double_field(FieldName::try_from("double").unwrap())
+        .add_currency_field(FieldName::try_from("currency").unwrap())
+        .add_datetime_field(FieldName::try_from("datetime").unwrap());
+
+    let mut record = Record::default();
+    record.insert(String::from("integer"), FieldValue::Integer(17));
+    record.insert(String::from("double"), FieldValue::Double(54621.154));
+    record.insert(String::from("currency"), FieldValue::Currency(4567.134));
+    record.insert(
+        String::from("datetime"),
+        FieldValue::DateTime(DateTime::new(
+            Date::new(1, 6, 2006).unwrap(),
+            Time::new(12, 50, 20).unwrap(),
+        )),
+    );
+
+    let records = vec![record];
+    write_read_compare(&records, writer_builder);
+}
+
+dbase_record! {
+    #[derive(Clone, Debug, PartialEq)]
+    struct FoxProRecord {
+        datetime: DateTime,
+        double: f64,
+        currency: f64,
+        integer: i32
+    }
+}
+
+#[test]
+fn from_scratch_fox_pro_struct_record() {
+    let writer_builder = TableWriterBuilder::new()
+        .add_datetime_field(FieldName::try_from("datetime").unwrap())
+        .add_double_field(FieldName::try_from("double").unwrap())
+        .add_currency_field(FieldName::try_from("currency").unwrap())
+        .add_integer_field(FieldName::try_from("integer").unwrap());
+
+    let records = vec![FoxProRecord {
+        datetime: DateTime::new(
+            Date::new(12, 2, 1999).unwrap(),
+            Time::new(21, 20, 35).unwrap(),
+        ),
+        double: 8649.48851,
+        currency: 3489.9612314,
+        integer: 42069,
+    }];
+
+    write_read_compare(&records, writer_builder);
+}
+
+dbase_record! {
+    #[derive(Clone, Debug, PartialEq)]
+    struct User {
+        first_name: String,
+        last_name: String,
+    }
+}
+
+// We just test that this compiles
+dbase_record! {
+    struct TestStructWithoutDerive {
+        this_should_compile: String
+    }
+}
+
+#[test]
+fn the_classical_user_record_example() {
+    let users = vec![
+        User {
+            first_name: "Ferrys".to_string(),
+            last_name: "Rust".to_string(),
+        },
+        User {
+            first_name: "Alex".to_string(),
+            last_name: "Rider".to_string(),
+        },
+        User {
+            first_name: "Jamie".to_string(),
+            last_name: "Oliver".to_string(),
+        },
+    ];
+
+    let mut cursor = Cursor::new(Vec::<u8>::new());
+    let writer = TableWriterBuilder::new()
+        .add_character_field("First Name".try_into().unwrap(), 50)
+        .add_character_field("Last Name".try_into().unwrap(), 50)
+        .build_with_dest(&mut cursor);
+
+    writer.write_records(&users).unwrap();
+    cursor.set_position(0);
+
+    let mut reader = Reader::new(cursor).unwrap();
+    let read_records = reader.read_as::<User>().unwrap();
+
+    assert_eq!(read_records, users);
+}
+
+#[cfg(feature = "yore")]
+#[test]
+fn non_unicode_codepages() {
+    let mut reader = dbase::ReaderBuilder::new()
+        .with_encoding(yore::code_pages::CP850)
+        .open(CP850_DBF)
+        .unwrap();
+    let records = reader.read().unwrap();
+
+    assert_eq!(
+        records[0].get("TEXT"),
+        Some(&FieldValue::Character(Some("Äöü!§$%&/".to_string())))
+    );
+
+    // Write back with same encoding
+    let mut cursor = Cursor::new(Vec::<u8>::new());
+    {
+        let writer = TableWriterBuilder::from_reader(reader).build_with_dest(&mut cursor);
+        writer.write_records(&records).unwrap();
+    }
+
+    cursor.set_position(0);
+
+    // Read again
+    let mut reader = dbase::ReaderBuilder::new()
+        .with_encoding(yore::code_pages::CP850)
+        .build(cursor)
+        .unwrap();
+    let records = reader.read().unwrap();
+
+    assert_eq!(
+        records[0].get("TEXT"),
+        Some(&FieldValue::Character(Some("Äöü!§$%&/".to_string())))
+    );
+}
+
+dbase::dbase_record!(
+    #[derive(PartialOrd, PartialEq, Debug)]
+    struct StationRecord {
+        name: String,
+        marker_col: String,
+        marker_sym: String,
+        line: String,
+    }
+);
+
+#[test]
+fn test_char_trimming() -> Result<(), Box<dyn std::error::Error>> {
+    let options = dbase::ReadingOptions::default().character_trim(dbase::TrimOption::Begin);
+    let mut reader = dbase::ReaderBuilder::new()
+        .with_options(options)
+        .open(STATIONS)?;
+
+    let records = reader.read_as::<StationRecord>()?;
+
+    assert_eq!(records.len() as u32, reader.header().num_records);
+
+    let expected = StationRecord {
+        name: format!(
+            "{:width$}",
+            "Franconia-Springfield",
+            width = reader.fields()[0].length() as usize
+        ),
+        marker_col: format!(
+            "{:width$}",
+            "#0000ff",
+            width = reader.fields()[0].length() as usize
+        ),
+        marker_sym: format!(
+            "{:width$}",
+            "rail-metro",
+            width = reader.fields()[0].length() as usize
+        ),
+        line: format!(
+            "{:width$}",
+            "blue",
+            width = reader.fields()[0].length() as usize
+        ),
+    };
+    assert_eq!(records[1], expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_record_marked_as_deleted_are_skipped_by_reader() -> Result<(), Box<dyn std::error::Error>> {
+    let mut reader = dbase::Reader::from_path(STATIONS_WITH_DELETED)?;
+    let records = reader.read_as::<StationRecord>()?;
+
+    // We have one deleted record in the file
+    assert_eq!(records.len() as u32, reader.header().num_records - 1);
+
+    let expected = StationRecord {
+        name: "Franconia-Springfield".to_string(),
+        marker_col: "#0000ff".to_string(),
+        marker_sym: "rail-metro".to_string(),
+        line: "blue".to_string(),
+    };
+    assert_eq!(records[0], expected);
+
+    Ok(())
+}
+
+#[cfg(feature = "encoding_rs")]
+#[test]
+fn test_codepages_cp936() {
+    let mut reader = dbase::Reader::from_path(CP936_DBF).unwrap();
+    let records = reader.read().unwrap();
+
+    assert_eq!(
+        records[0].get("TEST"),
+        Some(&FieldValue::Character(Some("测试中文".to_string())))
+    );
+}
+
+#[test]
+fn test_file_with_null_in_field_names() {
+    let reader = dbase::Reader::from_path("./tests/data/KUNDEN-schema-only.DBF").unwrap();
+    let expected_field_names = [
+        "K_N",
+        "K_AC",
+        "K_B",
+        "K_UMS_MO",
+        "K_SKO_MO",
+        "K_UMS_JA",
+        "K_SKO_JA",
+        "K_UMS_VJ",
+        "K_KURZ",
+        "K_VORZ",
+        "K_NAME1",
+        "K_NAME2",
+        "K_STRASSE",
+        "K_PLZ",
+        "K_STADT",
+        "K_LAND",
+        "K_HSTRASSE",
+        "K_HPLZ",
+        "K_HSTADT",
+        "K_LVORZ",
+        "K_LNAME1",
+        "K_LNAME2",
+        "K_LSTRASSE",
+        "K_LPLZ",
+        "K_LSTADT",
+        "K_LLAND",
+        "K_T",
+        "K_S",
+        "K_UIDENT",
+        "K_MST",
+        "K_I",
+        "K_L",
+        "K_KOP",
+        "K_BEARB",
+        "K_TEL_BWS",
+        "K_FAX_BWS",
+        "K_EM_BWS",
+        "K_F3",
+        "K_EM_PART",
+        "K_BEMERKE",
+        "K_UNSLNR",
+        "K_LIEFBED",
+        "K_ZAHLBED",
+        "K_FLAG",
+        "K_FAX",
+        "K_TELEFON",
+        "K_PARTNER",
+        "K_X",
+        "WERGETAN",
+    ];
+
+    assert_eq!(reader.fields().len(), expected_field_names.len());
+
+    for (expected_name, field) in expected_field_names.into_iter().zip(reader.fields().iter()) {
+        assert_eq!(expected_name, field.name());
+    }
+}
+
+// record_index() and field_index() contract tests
+
+#[test]
+fn test_header_error_has_no_record_index() {
+    let error = Reader::new(Cursor::new(vec![])).expect_err("expected error for empty input");
+    assert_eq!(error.record_index(), None);
+}
+
+#[test]
+fn test_deletion_flag_error_has_record_index_but_no_field_index() {
+    // Write 3 records so we can target a non-zero record index.
+    let mut dst = Cursor::new(Vec::<u8>::new());
+    let mut record = Record::default();
+    record.insert(
+        "name".to_owned(),
+        FieldValue::Character(Some("test".to_owned())),
+    );
+    TableWriterBuilder::new()
+        .add_character_field(FieldName::try_from("name").unwrap(), 10)
+        .build_with_dest(&mut dst)
+        .write_records(&[record.clone(), record.clone(), record])
+        .unwrap();
+
+    // Use the header to find the end of record #0, then truncate there so that
+    // reading the deletion flag of record #1 hits an unexpected EOF.
+    let bytes = dst.into_inner();
+    let header = *Reader::new(Cursor::new(bytes.clone())).unwrap().header();
+    let record_1_start = header.offset_to_first_record as usize + header.size_of_record as usize;
+    let truncated = bytes[..record_1_start].to_vec();
+
+    let error = Reader::new(Cursor::new(truncated))
+        .unwrap()
+        .read()
+        .expect_err("expected deletion flag error");
+
+    assert_eq!(error.record_index(), Some(RecordIndex(1)));
+    assert_eq!(error.field_index(), None);
+}
