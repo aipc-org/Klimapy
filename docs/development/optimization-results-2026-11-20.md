@@ -77,3 +77,8 @@ Installed-wheel and public-release status are recorded in the taskbook.
 EOF/constant/overflow/missing masks, packed and default-fill reads, spherical
 nearest versus brute force, irregular conservative overlap versus explicit area
 integration, and iterator ownership are covered by native tests.
+
+Official PyPI 1.3.3 wheel: 117 native tests, bundled-runtime isolation checks and
+130 independent CN05.1 tile checks separately passed after installation from
+https://pypi.org/simple. GitHub tag run 44692616875 passed all platform checks
+and OIDC publication. Source commit: 9130b96c2f00095ae2e19eca2427a7f53981e3cd.

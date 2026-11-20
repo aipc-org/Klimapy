@@ -18,8 +18,8 @@
 5. [x] P1 EOF：测量 faer 与可用 LAPACK，评估少量模态算法和工作区复制；只采用有准确性、性能与打包证据的实现。近似算法不得静默替代精确默认语义。
 6. [x] P2 订正/干旱/批量：测量逐格点排序、工作区分配、跨步访问及重复扫描；实施有依据的工作区复用、融合或受控并行。核验线程预算，避免与外部数值库过度并行。
 7. [x] 验收：Test 原生测试 + Test/Test1 CN05.1 独立参考；构建 wheel/sdist 后分别执行安装包测试与真实数据切片比对。记录非全量数据和未本机验证平台的限制。
-8. [ ] 发布：核对远端与 PyPI 版本，选择一次新版本并同步元数据/英文变更说明；只提交本次清楚来源的修改。作者和提交者 Michalrees，正文独立行“修改来自Michalrees”。不修改持久 Git 身份。
-9. [ ] 推送本次提交与匹配的新版本标签；观察既有 publish.yml 的多平台构建和 OIDC 发布，核对 PyPI 文件，精确安装新版本并验收。记录提交、标签、Actions、PyPI 链接。
+8. [x] 发布：核对远端与 PyPI 版本，选择一次新版本并同步元数据/英文变更说明；只提交本次清楚来源的修改。作者和提交者 Michalrees，正文独立行“修改来自Michalrees”。不修改持久 Git 身份。
+9. [x] 推送本次提交与匹配的新版本标签；观察既有 publish.yml 的多平台构建和 OIDC 发布，核对 PyPI 文件，精确安装新版本并验收。记录提交、标签、Actions、PyPI 链接。
 
 ## 进度与决策
 
@@ -44,3 +44,15 @@
 - 首次本地 wheel 检查发现旧 build/lib 目录残留历史模块，隔离该生成目录后重新构建，确认规范模块与无历史目录，再重新安装复验通过。未修改历史提交。
 - 本地 wheel 为无内置运行时的开发构建；官方三平台内置依赖 wheel 由既有 GitHub 工作流构建并验证。
 - Rust fmt/clippy 与 Python 未定义名称检查通过；未向 Test 添加任何历史依赖或开发工具。
+
+## GitHub / PyPI 发布记录
+
+- 代码提交：`9130b96c2f00095ae2e19eca2427a7f53981e3cd`，标签 `v1.3.3`；作者和提交者均为 Michalrees <gpt@localhost>，正文含“修改来自Michalrees”。
+- [完整标签检查与发布运行](https://github.com/aipc-org/Klimapy/actions/runs/44692616875) 成功；同一提交的冗余 main 运行已取消，标签运行的所有检查保留并通过。
+- Python 3.8/3.10/3.12/3.13、manylinux 及 Linux/Windows/macOS 原生 wheel 检查通过。
+- [PyPI 1.3.3](https://pypi.org/project/klimapy/1.3.3/) 由既有 OIDC 上传成功，正式 Simple 索引核对到三个 wheel 与源码包。
+- Linux wheel：`klimapy-1.3.3-py3-none-manylinux_2_39_x86_64.whl`；SHA256 `ddf40fc2ecf031da0f2e4ff2fa37c284f6e5d041c3b88523a1cdbe3dc87e7897`，与下载的 CI 产物一致。
+- 从正式 PyPI 精确安装 1.3.3 后，117 项原生测试及内置 NetCDF/HDF5、PROJ、GDAL 独立加载验证通过。
+- Linux 要求 glibc >= 2.39；macOS wheel 仅 ARM64，Intel Mac 仍需源码构建。Windows/macOS 的执行验证由各平台 CI 完成，本机为 Linux。
+
+- PyPI 官方 wheel 的 Test/Test1 CN05.1 独立比对最终 130 项全部通过（2019–2020 年 6×8 切片），本轮发布验收完成。
