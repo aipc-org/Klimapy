@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2 — 2026-11-20
+
+- Tag macOS native wheels with the actual build-host architecture, rather than inheriting universal2 from the Python interpreter. The bundled Rust and GIS libraries are not universal binaries.
+
 ## 1.3.1 — 2026-11-20
 
 - Include upstream Cargo source directories omitted by build-directory ignore rules.

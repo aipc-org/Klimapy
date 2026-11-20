@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import platform as host_platform
 import shutil
 import subprocess
 import sys
@@ -131,6 +132,14 @@ class RustBuild(build_ext):
 class NativeWheel(bdist_wheel):
     def get_tag(self):
         python, abi, platform = super().get_tag()
+        if sys.platform == "darwin" and not self.root_is_pure:
+            # Cargo and the bundled conda runtime target the build host only.
+            # A universal2 Python interpreter does not make those binaries fat.
+            architecture = host_platform.machine()
+            if architecture not in ("arm64", "x86_64"):
+                raise RuntimeError("Unsupported macOS architecture: " + architecture)
+            if platform.endswith("_universal2"):
+                platform = platform[: -len("_universal2")] + "_" + architecture
         # ctypes uses a C ABI and does not link against CPython.
         return (
             (python, abi, platform) if self.root_is_pure else ("py3", "none", platform)
