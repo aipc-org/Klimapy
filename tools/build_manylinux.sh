@@ -3,6 +3,7 @@
 set -euo pipefail
 cd /io
 PYTHON_BIN="${KLIMAPY_MANYLINUX_PYTHON:-/opt/python/cp310-cp310/bin/python}"
+WHEEL_PLATFORM="${KLIMAPY_WHEEL_PLATFORM:-manylinux_2_39_x86_64}"
 if ! command -v cargo >/dev/null 2>&1; then
     export CARGO_HOME=/tmp/klimapy-cargo
     export RUSTUP_HOME=/tmp/klimapy-rustup
@@ -25,7 +26,7 @@ export KLIMAPY_REQUIRE_BUNDLE=1
 "$PYTHON_BIN" tools/manage.py build --rust on --outdir /tmp/klimapy-unrepaired
 for wheel in /tmp/klimapy-unrepaired/*.whl; do
     "$PYTHON_BIN" -m auditwheel show "$wheel"
-    "$PYTHON_BIN" -m auditwheel repair --plat manylinux_2_28_x86_64 --wheel-dir /io/wheelhouse "$wheel"
+    "$PYTHON_BIN" -m auditwheel repair --plat "$WHEEL_PLATFORM" --wheel-dir /io/wheelhouse "$wheel"
 done
 conda env create -f /io/environment.yml
 conda run -n Test python -m pip install --no-deps /io/wheelhouse/*.whl

@@ -65,3 +65,10 @@ python tools/manage.py clean                  # 预览可清理产物
 `data/`、`work/`、`outputs/` 与原始、处理后数据目录用于本地研究运行，不进入版本控制。
 
 MIT 许可证。联系：yuhaoran251@mails.ucas.ac.cn。
+
+### Linux 二进制包的系统要求（1.3.1）
+
+内置原生运行时的 Linux x86-64 wheel 使用经 auditwheel 校验的
+`manylinux_2_39` 标签，需要 glibc 2.39 或更新版本（例如 Ubuntu 24.04）。
+较旧 Linux 可从源码构建，需要 Rust/Cargo 和本机原生 NetCDF、PROJ、GDAL 库。
+Windows 和 macOS 使用各自平台的 wheel。Python 层运行依赖仍只有 NumPy。

@@ -69,3 +69,12 @@ a host wheel must never simply be renamed to a manylinux tag. macOS and Windows
 need their own build and installed-wheel acceptance jobs. Current automation
 covers Linux x86-64, the Windows runner architecture and the macOS runner
 architecture; it does not establish universal CPU/OS support.
+
+### Linux 1.3.1 compatibility baseline
+
+The current conda-forge native runtime requires the `manylinux_2_39_x86_64`
+policy because of its versioned C++ symbols. Release repair explicitly checks
+that policy; no incompatible wheel is relabelled as manylinux_2_28. The build
+still runs in the manylinux_2_28 container, but the wheel's declared compatibility
+is the stricter audited baseline. Older glibc systems can build from source
+with their own native libraries. Original runtime SONAMEs are retained.

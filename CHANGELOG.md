@@ -5,7 +5,8 @@
 - Include upstream Cargo source directories omitted by build-directory ignore rules.
 - Verify every vendored file against its Cargo checksum and require it in Git before CI builds.
 - Declare the Windows PE dependency scanner in the isolated build environment.
-- Supply native PROJ in source-build CI and isolate bundled C++ runtimes for manylinux compatibility.
+- Supply native PROJ in source-build CI and declare the audited manylinux_2_39 Linux binary baseline.
+- Preload the bundled NetCDF DLL with Python's registered DLL search directories on Windows.
 - Includes the native workflow and float32 optimization changes listed below.
 
 ## 1.3.0 — 2026-11-19（构建未通过，未上传 PyPI）

@@ -91,33 +91,7 @@ def stage_runtime(prefix, destination):
         shutil.copy2(source, out)
         paths.append(out)
     if sys.platform.startswith("linux"):
-        # Conda's C++ runtime can provide newer versioned symbols than the
-        # manylinux system baseline. Give the bundled providers private SONAMEs
-        # and rewrite their consumers, so they are not resolved as OS runtimes.
-        # glibc itself is never bundled or renamed; auditwheel still verifies it.
-        private = {
-            "libstdc++.so.6": "libklimapy_stdcpp.so.6",
-            "libgcc_s.so.1": "libklimapy_gcc_s.so.1",
-        }
-        available = {path.name for path in paths}
-        private = {old: new for old, new in private.items() if old in available}
-        for index, path in enumerate(paths):
-            if path.name in private:
-                renamed = path.with_name(private[path.name])
-                path.rename(renamed)
-                paths[index] = renamed
-                subprocess.run(
-                    ["patchelf", "--set-soname", renamed.name, str(renamed)], check=True
-                )
         for path in paths:
-            dependencies = subprocess.check_output(
-                ["patchelf", "--print-needed", str(path)], text=True
-            ).splitlines()
-            for old, new in private.items():
-                if old in dependencies:
-                    subprocess.run(
-                        ["patchelf", "--replace-needed", old, new, str(path)], check=True
-                    )
             subprocess.run(
                 ["patchelf", "--set-rpath", "$ORIGIN", str(path)], check=True
             )

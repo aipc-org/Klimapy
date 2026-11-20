@@ -104,6 +104,10 @@ def _io_library():
         raise RuntimeError(
             "libnetcdf not found; set KLIMAPY_NETCDF_LIBRARY to its shared-library path"
         )
+    if sys.platform == "win32":
+        # Python uses LoadLibraryEx with the registered DLL directories. Retain
+        # the handle so Rust's subsequent LoadLibraryA reuses this exact image.
+        lib._netcdf_runtime = ct.CDLL(library)
     _check(lib, lib.kl_nc_init(_name(library)))
     return lib
 
