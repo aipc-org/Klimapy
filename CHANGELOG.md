@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.1 — 2026-11-19
+## 1.3.1 — 2026-11-20
 
 - Include upstream Cargo source directories omitted by build-directory ignore rules.
 - Verify every vendored file against its Cargo checksum and require it in Git before CI builds.

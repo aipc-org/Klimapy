@@ -28,7 +28,5 @@ for wheel in /tmp/klimapy-unrepaired/*.whl; do
     "$PYTHON_BIN" -m auditwheel show "$wheel"
     "$PYTHON_BIN" -m auditwheel repair --plat "$WHEEL_PLATFORM" --wheel-dir /io/wheelhouse "$wheel"
 done
-conda env create -f /io/environment.yml
-conda run -n Test python -m pip install --no-deps /io/wheelhouse/*.whl
-conda run -n Test python tools/manage.py test --installed --require-rust
-conda run -n Test python tools/check_bundled_runtime.py
+# Installed-wheel acceptance runs on the Ubuntu 24.04 host, matching the
+# declared glibc 2.39 baseline rather than this older build container.

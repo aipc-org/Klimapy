@@ -65,6 +65,18 @@ jobs:
         run: python3 tools/check_vendor.py --git-index
       - name: Build, repair and verify manylinux wheel
         run: docker run --rm -v "$PWD:/io" quay.io/pypa/manylinux_2_28_x86_64 bash /io/tools/build_manylinux.sh
+      - uses: conda-incubator/setup-miniconda@04b72d7799e2bae3771b041de9b46c710d29caab # v4
+        with:
+          miniforge-version: latest
+          activate-environment: Test
+          environment-file: environment.yml
+          python-version: '3.12'
+      - name: Verify repaired wheel on its supported glibc baseline
+        shell: bash -el {0}
+        run: |
+          conda run -n Test python -m pip install --no-deps wheelhouse/*.whl
+          conda run -n Test python tools/manage.py test --installed --require-rust
+          conda run -n Test python tools/check_bundled_runtime.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: manylinux-wheel
