@@ -331,7 +331,7 @@ class Field:
             v.write(self.values)
 
 
-def read_field(path, variable=None, *, indexers=None):
+def read_field(path, variable=None, *, indexers=None, dtype="float64"):
     """Read only the selected numeric variable region; close the native file."""
     with Dataset(path) as ds:
         names = ds.names()
@@ -347,7 +347,7 @@ def read_field(path, variable=None, *, indexers=None):
         if unknown:
             raise ValueError("Unknown dimensions: " + str(sorted(unknown)))
         key = tuple(selectors.get(d, slice(None)) for d in v.dims)
-        values = v[key]
+        values = v.read(key, dtype=dtype)
         dims, coords, attrs = [], {}, {}
         for d, index in zip(v.dims, key):
             if isinstance(index, (int, np.integer)):

@@ -95,6 +95,8 @@ def svd(data, *, n_modes=None, tol=1e-12, max_sweeps=100):
             max_sweeps,
         )
     )
+    if keep == rank:
+        return left, singular, right
     return left[:, :keep].copy(), singular[:keep].copy(), right[:keep].copy()
 
 

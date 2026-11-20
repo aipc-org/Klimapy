@@ -24,7 +24,7 @@
 
 ## 项目架构与默认测试要求（2026-10-28 起长期生效）
 
-- Python 负责接口、参数校验、元数据与结果组织；已迁移的底层计算由 Rust 引擎执行，不维护可切换的 Python 数值备用实现。
+- Python 负责接口、参数校验、元数据与结果组织；已迁移的底层计算由原生引擎执行（Rust 为现有主体；2026-11-20 用户允许按需采用 C/C++/Fortran），不维护可切换的 Python 数值备用实现。
 - 文件格式允许使用原生 libnetcdf/libhdf5；原生数据入口不得依赖 xarray、netCDF4-Python、SciPy、pandas、cftime、Dask、GIS 或 tqdm 等历史 Python 库。
 - 本项目所有日常测试与新增功能验收默认使用专用 conda 环境 **Test**，本机路径 `/opt/miniconda3/envs/Test`。不能继续以 MET、base、系统 Python 或带历史依赖的开发环境测试结果替代 Test 环境验收。
 - Test 只安装 Python、NumPy、Klimapy 及必要的安装/构建工具；不得安装 `[legacy]`、`[io]`、`[gis]` 等历史依赖 extra；开发工具也应放到独立工具环境，也不得为通过旧测试向 Test 补装 xarray、netCDF4-Python、SciPy、pandas、cftime、Dask、rioxarray、geopandas、tqdm。
@@ -36,7 +36,7 @@
 
 ## 原生迁移与真实数据回归（2026-10-29）
 
-- 所有生产功能只使用 Python 标准库、NumPy 和必需 Rust 引擎；历史框架只允许在独立 Test1 参考进程中使用。不得新增旧框架适配器或生产 Python 数值后备实现。
+- 所有生产功能只使用 Python 标准库、NumPy 和必需原生引擎（允许 Rust/C/C++/Fortran）；历史框架只允许在独立 Test1 参考进程中使用。不得新增旧框架适配器或生产 Python 数值后备实现。
 - 保留已有科学功能并迁移，公开数据容器统一为 `klimapy.native.Field`；批量指标返回名称到 Field 的字典。不可通过删掉旧功能来宣称完成迁移。
 - 本地真实回归数据在 `data/CN05.1/汇总`；整个 `/data/` 与 `/outputs/` 均不进 Git，也不进入分发包。禁止为 GitHub CI 上传这些原始数据。
 - 用户确认逐日 Pre 的 2019 文件确为 2019 年。只修正项目数据副本的 CF 起点为 2019-01-01；1961—2018 文件和原始数据源保持不变。修正前备份及记录在被忽略的 data 内。

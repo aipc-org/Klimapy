@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "klimapy"
-version = "1.3.2"
+version = "1.3.3"
 authors = [
     {name = "YuHaoRan", email = "yuhaoran251@mails.ucas.ac.cn"}
 ]

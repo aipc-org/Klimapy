@@ -17,6 +17,11 @@ pub(crate) fn decompose(a: &[f64], rows: usize, cols: usize) -> Result<Factors, 
             a[i * cols + j] / scale
         }
     });
+    decompose_matrix(matrix, scale)
+}
+fn decompose_matrix(matrix: Mat<f64>, scale: f64) -> Result<Factors, i32> {
+    let (rows, cols) = (matrix.nrows(), matrix.ncols());
+    let k = rows.min(cols);
     // Prevent a solver panic from crossing the public extern C entry points.
     let factors = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| matrix.thin_svd()))
         .map_err(|_| 6)?
@@ -183,17 +188,27 @@ pub unsafe extern "C" fn kl_eof(
     if keep > rank {
         return 1;
     }
-    let mut anomaly = vec![0.0; steps * valid.len()];
+    // Construct the solver's column-major matrix directly, avoiding a second
+    // full time-by-space anomaly buffer and repeated square roots.
+    let roots: Vec<f64> = valid.iter().map(|&i| w[i].sqrt()).collect();
+    let mut scale = 0.0_f64;
     for t in 0..steps {
         for (j, &i) in valid.iter().enumerate() {
-            let x = (a[t * cells + i] - mu[i]) * w[i].sqrt();
+            let x = (a[t * cells + i] - mu[i]) * roots[j];
             if !x.is_finite() {
                 return 3;
             }
-            anomaly[t * valid.len() + j] = x;
+            scale = scale.max(x.abs());
         }
     }
-    let (u, s, vt) = match decompose(&anomaly, steps, valid.len()) {
+    let matrix = Mat::from_fn(steps, valid.len(), |t, j| {
+        if scale == 0.0 {
+            0.0
+        } else {
+            (a[t * cells + valid[j]] - mu[valid[j]]) * roots[j] / scale
+        }
+    });
+    let (u, s, vt) = match decompose_matrix(matrix, scale) {
         Ok(v) => v,
         Err(c) => return c,
     };

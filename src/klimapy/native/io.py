@@ -67,6 +67,13 @@ def _io_library():
             _SIZE_PTR,
             ct.POINTER(ct.c_double),
         ],
+        "kl_nc_read_f32": [
+            ct.c_int,
+            ct.c_char_p,
+            _SIZE_PTR,
+            _SIZE_PTR,
+            ct.POINTER(ct.c_float),
+        ],
         "kl_nc_def_dim": [ct.c_int, ct.c_char_p, ct.c_size_t],
         "kl_nc_def_var": [ct.c_int, ct.c_char_p, ct.c_char_p, ct.c_int, ct.c_int],
         "kl_nc_put_attribute": [
@@ -89,7 +96,11 @@ def _io_library():
         fn = getattr(lib, name)
         fn.argtypes, fn.restype = args, ct.c_int
     lib.kl_nc_error.argtypes, lib.kl_nc_error.restype = [ct.c_int], ct.c_char_p
-    library = os.environ.get("KLIMAPY_NETCDF_LIBRARY") or bundled_library("netcdf") or find_library("netcdf")
+    library = (
+        os.environ.get("KLIMAPY_NETCDF_LIBRARY")
+        or bundled_library("netcdf")
+        or find_library("netcdf")
+    )
     if not library and sys.platform == "darwin":
         # ctypes discovery can miss Homebrew outside dyld's search paths.
         for prefix in ("/opt/homebrew", "/usr/local"):
@@ -374,20 +385,33 @@ class Variable:
         )
 
     def __getitem__(self, key):
+        return self.read(key)
+
+    def read(self, key=Ellipsis, *, dtype="float64"):
+        """Read decoded values; float32 is an explicit memory-saving option.
+
+        Packing and validity checks use double precision before final rounding.
+        Coordinates retain float64 when read through Field helpers.
+        """
+        dtype = np.dtype(dtype)
+        if dtype not in (np.dtype("float32"), np.dtype("float64")):
+            raise ValueError("Read dtype must be native float32 or float64")
         starts, counts, squeeze = self._slice(key)
-        out = np.empty(tuple(int(n) for n in counts), dtype=np.float64)
+        out = np.empty(tuple(int(n) for n in counts), dtype=dtype)
+        single = dtype == np.dtype("float32")
+        pointer = ct.POINTER(ct.c_float) if single else ct.POINTER(ct.c_double)
         ds = self._dataset
         with ds._lock:
             identifier = ds._open()
             if out.size:
                 _check(
                     ds._lib,
-                    ds._lib.kl_nc_read(
+                    (ds._lib.kl_nc_read_f32 if single else ds._lib.kl_nc_read)(
                         identifier,
                         _name(self.name),
                         _ptr(starts, _SIZE_PTR),
                         _ptr(counts, _SIZE_PTR),
-                        _ptr(out),
+                        _ptr(out, pointer),
                     ),
                 )
         return np.squeeze(out, axis=squeeze)

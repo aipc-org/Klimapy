@@ -6,6 +6,7 @@ recursive-include tools *.sh *.py
 include CONTRIBUTING.md CHANGELOG.md
 recursive-include benchmarks *.py *.md
 include benchmarks/results/reference-2026-10-19.json
+include benchmarks/results/optimization-2026-11-20.json
 
 include AGENTS.md environment.yml
 prune data

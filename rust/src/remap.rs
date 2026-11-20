@@ -46,6 +46,59 @@ fn sphere(y: f64, x: f64) -> [f64; 3] {
     [a.cos() * b.cos(), a.cos() * b.sin(), a.sin()]
 }
 
+// Balanced 3-D search preserves the existing chord-distance spherical metric.
+struct NearestNode {
+    point: [f64; 3],
+    index: usize,
+    axis: usize,
+    left: Option<Box<NearestNode>>,
+    right: Option<Box<NearestNode>>,
+}
+impl NearestNode {
+    fn build(points: &mut [([f64; 3], usize)], depth: usize) -> Option<Box<Self>> {
+        if points.is_empty() {
+            return None;
+        }
+        let axis = depth % 3;
+        let mid = points.len() / 2;
+        points.select_nth_unstable_by(mid, |a, b| {
+            a.0[axis].total_cmp(&b.0[axis]).then(a.1.cmp(&b.1))
+        });
+        let (lo, rest) = points.split_at_mut(mid);
+        let (pivot, hi) = rest.split_first_mut().unwrap();
+        Some(Box::new(Self {
+            point: pivot.0,
+            index: pivot.1,
+            axis,
+            left: Self::build(lo, depth + 1),
+            right: Self::build(hi, depth + 1),
+        }))
+    }
+    fn query(&self, target: [f64; 3], best: &mut (f64, usize)) {
+        let distance = (0..3)
+            .map(|k| (self.point[k] - target[k]).powi(2))
+            .sum::<f64>();
+        if distance < best.0 || (distance == best.0 && self.index < best.1) {
+            *best = (distance, self.index);
+        }
+        let delta = target[self.axis] - self.point[self.axis];
+        let (near, far) = if delta <= 0.0 {
+            (&self.left, &self.right)
+        } else {
+            (&self.right, &self.left)
+        };
+        if let Some(node) = near {
+            node.query(target, best);
+        }
+        // Include equal distances so first-in-row-major tie ownership is stable.
+        if delta * delta <= best.0 {
+            if let Some(node) = far {
+                node.query(target, best);
+            }
+        }
+    }
+}
+
 /// Create an immutable plan. mode=1 bilinear,2 nearest,3 patch,4/5 conservative.
 /// # Safety
 /// Grid pointers/arrays must be readable with declared lengths; error writable.
@@ -86,6 +139,20 @@ pub unsafe extern "C" fn kl_remap_new(
         rows: Vec::new(),
         valid: Vec::new(),
     };
+    let nearest = if mode == 2 {
+        let mut points: Vec<_> = sy
+            .iter()
+            .enumerate()
+            .flat_map(|(a, &y)| {
+                sx.iter()
+                    .enumerate()
+                    .map(move |(b, &x)| (sphere(y, x), a * s.nx + b))
+            })
+            .collect();
+        NearestNode::build(&mut points, 0)
+    } else {
+        None
+    };
     let mut bounds = None;
     if mode >= 4 {
         if s.yb.is_null() || s.xb.is_null() || t.yb.is_null() || t.xb.is_null() {
@@ -117,12 +184,16 @@ pub unsafe extern "C" fn kl_remap_new(
                 let (ya, yz, xa, xz) = (oy[j], oy[j + 1], ox[i], ox[i + 1]);
                 let area = (yz - ya) * (xz - xa);
                 let mut total = 0.0;
-                for a in 0..s.ny {
+                let a0 = yb.partition_point(|&v| v <= ya).saturating_sub(1).min(s.ny);
+                let a1 = yb.partition_point(|&v| v < yz).min(s.ny);
+                let b0 = xb.partition_point(|&v| v <= xa).saturating_sub(1).min(s.nx);
+                let b1 = xb.partition_point(|&v| v < xz).min(s.nx);
+                for a in a0..a1 {
                     let (loy, hiy) = (ya.max(yb[a]), yz.min(yb[a + 1]));
                     if hiy <= loy {
                         continue;
                     }
-                    for b in 0..s.nx {
+                    for b in b0..b1 {
                         let (lox, hix) = (xa.max(xb[b]), xz.min(xb[b + 1]));
                         if hix <= lox {
                             continue;
@@ -141,15 +212,7 @@ pub unsafe extern "C" fn kl_remap_new(
             } else if mode == 2 {
                 let dest = sphere(y, x);
                 let mut best = (f64::INFINITY, 0usize);
-                for (a, &yy) in sy.iter().enumerate() {
-                    for (b, &xx) in sx.iter().enumerate() {
-                        let pos = sphere(yy, xx);
-                        let distance = (0..3).map(|k| (pos[k] - dest[k]).powi(2)).sum::<f64>();
-                        if distance < best.0 {
-                            best = (distance, a * s.nx + b);
-                        }
-                    }
-                }
+                nearest.as_ref().unwrap().query(dest, &mut best);
                 row.push((best.1, 1.0, 0.0, 0.0));
             } else if valid && mode == 1 {
                 let a = bracket(sy, y, 2);

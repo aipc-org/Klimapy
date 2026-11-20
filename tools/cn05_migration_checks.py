@@ -57,6 +57,12 @@ def native_checks(data, output, precipitation, provenance=None):
             collection, frequency=frequency, time_chunk_size=37
         ).values
     results["collection_values"] = collection.read().values
+    results["collection_float32_values"] = collection.read(dtype="float32").values
+    sums32 = np.zeros((1, *precipitation.shape[1:]), dtype=np.float64)
+    counts32 = np.zeros(sums32.shape, dtype=np.int32)
+    for field32 in collection.iter_blocks(37, dtype="float32"):
+        climate_accumulate(field32.values, np.zeros(len(field32.values), dtype=np.intp), sums32, counts32)
+    results["collection_float32_mean"] = climate_mean(sums32, counts32)[0]
     model = Field(
         precipitation.values * 0.8 + 1,
         precipitation.dims,
@@ -581,6 +587,8 @@ def reference_checks(data, output, precipitation):
     )[0]
     values = precipitation.values
     results["collection_values"] = values
+    results["collection_float32_values"] = np.asarray(values, dtype=np.float32)
+    results["collection_float32_mean"] = np.nanmean(np.asarray(values, dtype=np.float32), axis=0, dtype=np.float64)
     for frequency, rule in (
         ("monthly", "MS"),
         ("seasonal", "QS-DEC"),

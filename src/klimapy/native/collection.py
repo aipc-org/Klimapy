@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .field import Field, TimeAxis, read_field
+from .field import Field, TimeAxis
 from .io import Dataset
 
 
@@ -149,8 +149,12 @@ class FileCollection:
             sum(int(b - a - 1) for a, b in zip(self.days[:-1], self.days[1:]))
         )
 
-    def iter_blocks(self, time_chunk_size=128):
-        """Yield Fields; at most one file is open during each bounded read."""
+    def iter_blocks(self, time_chunk_size=128, *, dtype="float64"):
+        """Yield decoded Fields, retaining one file per iterator until exhausted.
+
+        Close the generator when stopping early to release its file immediately.
+        Coordinates are reused from the validated collection metadata.
+        """
         if (
             isinstance(time_chunk_size, bool)
             or not isinstance(time_chunk_size, (int, np.integer))
@@ -158,29 +162,43 @@ class FileCollection:
         ):
             raise ValueError("time_chunk_size must be a positive integer")
         offset = 0
+        dtype = np.dtype(dtype)
+        if dtype not in (np.dtype("float32"), np.dtype("float64")):
+            raise ValueError("Read dtype must be native float32 or float64")
         for _, path, days, _, _ in self._records:
-            for start in range(0, len(days), time_chunk_size):
-                stop = min(start + time_chunk_size, len(days))
-                block = read_field(
-                    path, self.variable, indexers={"time": slice(start, stop)}
-                )
-                block.attrs = dict(self.attrs)
-                block.coords["time"] = self.coords["time"][
-                    offset + start : offset + stop
-                ]
-                block.coordinate_attrs["time"] = dict(self.coordinate_attrs["time"])
-                block.time_bounds = (
-                    None
-                    if self.time_bounds is None
-                    else self.time_bounds[offset + start : offset + stop]
-                )
-                yield block
+            with Dataset(path) as ds:
+                variable = ds[self.variable]
+                for start in range(0, len(days), time_chunk_size):
+                    stop = min(start + time_chunk_size, len(days))
+                    key = tuple(
+                        slice(start, stop) if d == "time" else slice(None)
+                        for d in self.dims
+                    )
+                    coords = {
+                        d: self.coords[d].copy() for d in self.dims if d != "time"
+                    }
+                    coords["time"] = self.coords["time"][offset + start : offset + stop]
+                    bounds = (
+                        None
+                        if self.time_bounds is None
+                        else self.time_bounds[offset + start : offset + stop]
+                    )
+                    yield Field(
+                        variable.read(key, dtype=dtype),
+                        self.dims,
+                        coords,
+                        dict(self.attrs),
+                        self.name,
+                        {d: dict(a) for d, a in self.coordinate_attrs.items()},
+                        bounds,
+                    )
             offset += len(days)
 
-    def read(self):
+    def read(self, *, dtype="float64"):
         """Materialize the complete collection; use iter_blocks for large data."""
         values = np.concatenate(
-            [b.values for b in self.iter_blocks()], axis=self.dims.index("time")
+            [b.values for b in self.iter_blocks(dtype=dtype)],
+            axis=self.dims.index("time"),
         )
         return Field(
             values,

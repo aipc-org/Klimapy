@@ -66,6 +66,7 @@ class NativeIOTests(TestCase):
                     )
                     v.write_raw(np.array([0.0, 1.0]), slice(0, 2))
                 with Dataset(path) as ds:
+                    np.testing.assert_allclose(ds["value"].read(dtype="float32"), [0., 1., np.nan], equal_nan=True)
                     np.testing.assert_allclose(
                         ds["value"][...],
                         [0.0, 1.0, np.nan],

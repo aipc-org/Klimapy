@@ -260,14 +260,14 @@ pub unsafe extern "C" fn kl_smooth(
                 .collect()
         })
         .collect();
+    let mut valid = Vec::with_capacity(steps);
+    let mut filled = vec![0.0; steps];
     for c in 0..cells {
-        let valid: Vec<usize> = (0..steps)
-            .filter(|&t| v[t * cells + c].is_finite())
-            .collect();
+        valid.clear();
+        valid.extend((0..steps).filter(|&t| v[t * cells + c].is_finite()));
         if valid.is_empty() {
             continue;
         }
-        let mut filled = vec![0.0; steps];
         let mut j = 0;
         for (t, x) in filled.iter_mut().enumerate() {
             while j + 1 < valid.len() && valid[j + 1] <= t {

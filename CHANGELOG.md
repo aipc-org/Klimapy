@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.3 — 2026-11-20
+
+- Add explicit float32 decoded NetCDF reads to variables, Fields and file collections while preserving float64 defaults and double-precision packed-value decoding.
+- Reuse one file handle per collection iterator and validated coordinate metadata; close partially consumed generators to release files immediately.
+- Build spherical nearest-neighbor plans with a balanced spatial index and locate conservative overlap candidates using ordered cell boundaries.
+- Remove a full EOF anomaly buffer, avoid redundant full-SVD output copies, and reuse harmonic-smoothing and drought workspaces.
+- Add independent numeric/resource regressions, real-data float32 collection checks and a reproducible native-library comparison benchmark.
+
 ## 1.3.2 — 2026-11-20
 
 - Tag macOS native wheels with the actual build-host architecture, rather than inheriting universal2 from the Python interpreter. The bundled Rust and GIS libraries are not universal binaries.

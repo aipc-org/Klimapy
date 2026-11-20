@@ -58,6 +58,7 @@ api! {
     get_strings: unsafe extern "C" fn(c_int,c_int,*const c_char,*mut *mut c_char)->c_int => "nc_get_att_string",
     free_strings: unsafe extern "C" fn(usize,*mut *mut c_char)->c_int => "nc_free_string",
     get_att: unsafe extern "C" fn(c_int,c_int,*const c_char,*mut f64)->c_int => "nc_get_att_double",
+    get_float: unsafe extern "C" fn(c_int,c_int,*const usize,*const usize,*mut f32)->c_int => "nc_get_vara_float",
     get: unsafe extern "C" fn(c_int,c_int,*const usize,*const usize,*mut f64)->c_int => "nc_get_vara_double",
     fill: unsafe extern "C" fn(c_int,c_int,*mut c_int,*mut c_void)->c_int => "nc_inq_var_fill",
     def_fill: unsafe extern "C" fn(c_int,c_int,c_int,*const c_void)->c_int => "nc_def_var_fill",
@@ -357,6 +358,29 @@ pub unsafe extern "C" fn kl_nc_read(
     count: *const usize,
     output: *mut f64,
 ) -> i32 {
+    read_numeric(id, path, start, count, output.cast(), false)
+}
+/// Read decoded values into float32, applying packing in double precision.
+/// # Safety
+/// Same as kl_nc_read, but output holds product(count) floats.
+#[no_mangle]
+pub unsafe extern "C" fn kl_nc_read_f32(
+    id: i32,
+    path: *const c_char,
+    start: *const usize,
+    count: *const usize,
+    output: *mut f32,
+) -> i32 {
+    read_numeric(id, path, start, count, output.cast(), true)
+}
+unsafe fn read_numeric(
+    id: i32,
+    path: *const c_char,
+    start: *const usize,
+    count: *const usize,
+    output: *mut c_void,
+    single: bool,
+) -> i32 {
     locked!(a);
     if start.is_null() || count.is_null() || output.is_null() {
         return INVALID;
@@ -406,7 +430,24 @@ pub unsafe extern "C" fn kl_nc_read(
     if n > isize::MAX as usize / 8 {
         return INVALID;
     }
-    check!((a.get)(g, v, start, count, output));
+    // Native float storage needs no double-sized input buffer. Other storage
+    // types decode through doubles before rounding once to the requested dtype.
+    let direct_float = single && kind == 5;
+    let mut temporary = if single && !direct_float {
+        vec![0.0_f64; n]
+    } else {
+        Vec::new()
+    };
+    if direct_float {
+        check!((a.get_float)(g, v, start, count, output.cast()));
+    } else {
+        let dest = if single {
+            temporary.as_mut_ptr()
+        } else {
+            output.cast()
+        };
+        check!((a.get)(g, v, start, count, dest));
+    }
     let mut missing = Vec::new();
     let mut explicit_fill = false;
     for name in [c"_FillValue", c"missing_value"] {
@@ -485,12 +526,26 @@ pub unsafe extern "C" fn kl_nc_read(
     } else if code != -43 {
         return code;
     }
-    for x in std::slice::from_raw_parts_mut(output, n) {
-        *x = if !x.is_finite() || missing.contains(x) || *x < lower || *x > upper {
+    // Three alternative backing buffers; temporary is empty for direct reads.
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..n {
+        let x = if direct_float {
+            *output.cast::<f32>().add(i) as f64
+        } else if single {
+            temporary[i]
+        } else {
+            *output.cast::<f64>().add(i)
+        };
+        let decoded = if !x.is_finite() || missing.contains(&x) || x < lower || x > upper {
             f64::NAN
         } else {
-            *x * scale + offset
+            x * scale + offset
         };
+        if single {
+            *output.cast::<f32>().add(i) = decoded as f32;
+        } else {
+            *output.cast::<f64>().add(i) = decoded;
+        }
     }
 
     0

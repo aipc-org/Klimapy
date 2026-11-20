@@ -128,8 +128,11 @@ pub unsafe extern "C" fn kl_drought(
     o.fill(f64::NAN);
     let diag = std::slice::from_raw_parts_mut(diagnostics, ds);
     diag.fill(f64::NAN);
+    let mut rolling = vec![f64::NAN; n];
+    let mut sample = Vec::with_capacity(n / 12 + 1);
+    let mut positive = Vec::with_capacity(n / 12 + 1);
     for c in 0..cells {
-        let mut rolling = vec![f64::NAN; n];
+        rolling.fill(f64::NAN);
         for (t, value) in rolling.iter_mut().enumerate().skip(scale.saturating_sub(1)) {
             let mut sum = 0.0;
             let mut valid = true;
@@ -150,10 +153,12 @@ pub unsafe extern "C" fn kl_drought(
             }
         }
         for (month, &expected_count) in expected.iter().enumerate() {
-            let mut sample: Vec<f64> = (0..n)
-                .filter(|&t| selected[t] != 0 && months[t] == month && rolling[t].is_finite())
-                .map(|t| rolling[t])
-                .collect();
+            sample.clear();
+            sample.extend(
+                (0..n)
+                    .filter(|&t| selected[t] != 0 && months[t] == month && rolling[t].is_finite())
+                    .map(|t| rolling[t]),
+            );
             let k = (month * cells + c) * 6;
             diag[k] = sample.len() as f64;
             diag[k + 1] = 1.0;
@@ -163,7 +168,8 @@ pub unsafe extern "C" fn kl_drought(
             sample.sort_unstable_by(f64::total_cmp);
             let (shape, spread, location, pzero);
             if pet.is_none() {
-                let positive: Vec<f64> = sample.iter().copied().filter(|&v| v > 0.0).collect();
+                positive.clear();
+                positive.extend(sample.iter().copied().filter(|&v| v > 0.0));
                 pzero = 1.0 - positive.len() as f64 / sample.len() as f64;
                 if positive.len() < 8 {
                     diag[k + 1] = 2.0;
